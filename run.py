@@ -3,15 +3,15 @@ import re
 import json
 import imaplib
 import email
-import time
 import html
+from urllib.parse import urlsplit, parse_qs
 from email.header import decode_header
-from email.utils import parsedate_to_datetime
 
 IMAP_HOST = "imap.gmx.es"
 IMAP_PORT = 993
 OUTPUT_FILE = "result.json"
 MAX_MESSAGES = 100
+
 
 def decode_mime(value):
     if not value:
@@ -24,9 +24,11 @@ def decode_mime(value):
             parts.append(chunk)
     return "".join(parts)
 
+
 def get_body(msg):
     plain_parts = []
     html_parts = []
+
     if msg.is_multipart():
         for part in msg.walk():
             if part.get_content_disposition() == "attachment":
@@ -49,33 +51,62 @@ def get_body(msg):
 
     if plain_parts:
         return "\n".join(plain_parts)
+
     if html_parts:
         text = "\n".join(html_parts)
-        text = re.sub(r"(?i)<br\s*/?>", "\n", text)
-        text = re.sub(r"(?i)</p\s*>", "\n", text)
+        text = re.sub(r"(?i)<br\\s*/?>", "\n", text)
+        text = re.sub(r"(?i)</p\\s*>", "\n", text)
         return html.unescape(re.sub(r"<[^>]+>", " ", text))
+
     return ""
+
 
 def extract_value(body, labels):
     label_pattern = "|".join(re.escape(label) for label in labels)
     match = re.search(
-        rf"(?im)^\s*(?:{label_pattern})\s*:\s*(.+?)\s*$",
+        rf"(?im)^\\s*(?:{label_pattern})\\s*:\\s*(.+?)\\s*$",
         body
     )
     return match.group(1).strip().rstrip(".,") if match else ""
 
+
 def extract_m3u(body):
     decoded = body.replace("&amp;", "&").replace("&#x3D;", "=")
-    urls = re.findall(r"https?://[^\s<>\"']+", decoded, flags=re.I)
+    urls = re.findall(r"https?://[^\\s<>\\\"']+", decoded, flags=re.I)
+
     for url in urls:
         url = url.rstrip(".,);]")
-        if "m3u" in url.lower() or "playlist" in url.lower():
+        lower_url = url.lower()
+        if "m3u" in lower_url or "playlist" in lower_url or "get.php" in lower_url:
             return url
+
     return ""
+
+
+def values_from_url(m3u_url):
+    """Extrae los campos habituales de una URL M3U, si están presentes."""
+    if not m3u_url:
+        return {"username": "", "password": "", "host_url": ""}
+
+    try:
+        parsed = urlsplit(m3u_url)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        username = (params.get("username") or params.get("user") or [""])[0]
+        password = (params.get("password") or params.get("pass") or [""])[0]
+        host_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+        return {
+            "username": username,
+            "password": password,
+            "host_url": host_url
+        }
+    except (ValueError, TypeError):
+        return {"username": "", "password": "", "host_url": ""}
+
 
 def save_result(data):
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
 
 def main():
     user = os.environ.get("GMX_USER", "").strip()
@@ -87,6 +118,7 @@ def main():
         "estado": "SIN_RESULTADO",
         "asunto": "",
         "fecha_correo": "",
+        "remitente": "",
         "username": "",
         "password": "",
         "host_url": "",
@@ -107,13 +139,16 @@ def main():
         if status != "OK" or not data or not data[0]:
             result["mensaje"] = "La bandeja de entrada está vacía."
             save_result(result)
+            print(result["mensaje"])
             return
 
         ids = data[0].split()[-MAX_MESSAGES:]
+
         for msg_id in reversed(ids):
             status, msg_data = mail.fetch(msg_id, "(RFC822)")
             if status != "OK":
                 continue
+
             raw_message = next(
                 (item[1] for item in msg_data if isinstance(item, tuple)),
                 None
@@ -132,8 +167,24 @@ def main():
             host = extract_value(body, ["Host URL", "Host Url", "Server URL", "Servidor"])
             backup = extract_value(body, ["Backup Host Url", "Backup Host URL", "Backup URL"])
 
-            # Only accept a message that looks like an IPTV access response.
-            looks_relevant = bool(m3u and (username or host or "xtream" in body.lower()))
+            # Si el correo no presenta los campos por separado, intentar extraerlos
+            # de los parámetros de la URL M3U.
+            url_values = values_from_url(m3u)
+            username = username or url_values["username"]
+            stream_password = stream_password or url_values["password"]
+            host = host or url_values["host_url"]
+
+            body_lower = body.lower()
+            subject_lower = subject.lower()
+            looks_relevant = bool(
+                m3u and (
+                    username
+                    or host
+                    or "xtream" in body_lower
+                    or "iptv" in subject_lower
+                    or "trial line" in subject_lower
+                )
+            )
             if not looks_relevant:
                 continue
 
@@ -147,21 +198,28 @@ def main():
                 "host_url": host,
                 "backup_host_url": backup,
                 "m3u_url": m3u,
-                "mensaje": "Se ha extraído una respuesta M3U de la bandeja de entrada."
+                "mensaje": "Se ha extraído el enlace M3U y se han completado los campos disponibles desde el correo y su URL."
             })
             break
 
         if result["estado"] != "OK":
-            result["mensaje"] = f"No se ha encontrado una respuesta M3U en los últimos {len(ids)} mensajes revisados."
+            result["mensaje"] = (
+                f"No se ha encontrado una respuesta M3U reconocible "
+                f"en los últimos {len(ids)} mensajes revisados."
+            )
+
         save_result(result)
         print(result["mensaje"])
         print(f"Estado: {result['estado']}")
+        print("Se ha guardado result.json.")
+
     finally:
         if mail is not None:
             try:
                 mail.logout()
             except Exception:
                 pass
+
 
 if __name__ == "__main__":
     main()
