@@ -6,40 +6,40 @@
   <title>Resultado del correo M3U</title>
   <style>
     body{font-family:system-ui,Segoe UI,sans-serif;background:#0f172a;color:#f8fafc;margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;box-sizing:border-box}
-    main{width:min(680px,100%);background:#1e293b;padding:24px;border-radius:14px;box-sizing:border-box}
+    main{width:min(720px,100%);background:#1e293b;padding:24px;border-radius:14px;box-sizing:border-box}
     h1{font-size:1.5rem;color:#7dd3fc;margin-top:0}
     p{color:#cbd5e1;line-height:1.5}
     label{display:block;margin:18px 0 8px;font-weight:600}
     input[type=file]{width:100%;padding:12px;background:#0f172a;color:#fff;border:1px solid #475569;border-radius:8px;box-sizing:border-box}
     .field{margin-top:14px}
-    .field span{display:block;color:#94a3b8;font-size:.85rem;margin-bottom:5px}
+    .field>span{display:block;color:#94a3b8;font-size:.85rem;margin-bottom:5px}
     .value{display:flex;gap:8px;align-items:center}
     .value input{min-width:0;flex:1;padding:10px;border-radius:7px;border:1px solid #475569;background:#0f172a;color:#fff}
-    button{padding:10px 12px;border:0;border-radius:7px;background:#0284c7;color:#fff;cursor:pointer}
+    button{padding:10px 12px;border:0;border-radius:7px;background:#0284c7;color:#fff;cursor:pointer;white-space:nowrap}
     #results{display:none;margin-top:20px}
     #status{margin-top:12px;color:#bae6fd}
     .warning{font-size:.9rem;color:#fcd34d}
+    .meta{color:#cbd5e1;overflow-wrap:anywhere}
   </style>
 </head>
 <body>
 <main>
   <h1>Consulta del resultado M3U</h1>
-  <p>Cuando ejecutes el flujo de GitHub Actions, descarga el artefacto <b>resultado-correo-m3u</b>, descomprímelo y selecciona aquí el archivo <code>result.json</code>.</p>
+  <p>Ejecuta el flujo de GitHub Actions, descarga el artefacto <b>resultado-correo-m3u</b>, descomprímelo y selecciona aquí el archivo <code>result.json</code>.</p>
   <p class="warning">El resultado puede contener credenciales de acceso. No compartas el archivo ni el enlace M3U.</p>
   <label for="file">Seleccionar result.json</label>
   <input id="file" type="file" accept=".json,application/json">
   <div id="status" role="status"></div>
   <section id="results">
-    <div class="field"><span>Estado</span><div id="estado"></div></div>
-    <div class="field"><span>Asunto</span><div id="asunto"></div></div>
-    <div class="field"><span>Usuario</span><div id="username"></div></div>
-    <div class="field"><span>Contraseña</span><div id="password"></div></div>
-    <div class="field"><span>Servidor principal</span><div id="host_url"></div></div>
-    <div class="field"><span>Servidor alternativo</span><div id="backup_host_url"></div></div>
-    <div class="field">
-      <span>Enlace M3U</span>
-      <div class="value"><input id="m3u_url" readonly><button id="copy">Copiar</button></div>
-    </div>
+    <div class="field"><span>Estado</span><div id="estado" class="meta"></div></div>
+    <div class="field"><span>Asunto</span><div id="asunto" class="meta"></div></div>
+    <div class="field"><span>Remitente</span><div id="remitente" class="meta"></div></div>
+    <div class="field"><span>Fecha del correo</span><div id="fecha_correo" class="meta"></div></div>
+    <div class="field"><span>Usuario</span><div class="value"><input id="username" readonly><button data-copy="username">Copiar</button></div></div>
+    <div class="field"><span>Contraseña</span><div class="value"><input id="password" readonly><button data-copy="password">Copiar</button></div></div>
+    <div class="field"><span>Servidor principal</span><div class="value"><input id="host_url" readonly><button data-copy="host_url">Copiar</button></div></div>
+    <div class="field"><span>Servidor alternativo</span><div class="value"><input id="backup_host_url" readonly><button data-copy="backup_host_url">Copiar</button></div></div>
+    <div class="field"><span>Enlace M3U</span><div class="value"><input id="m3u_url" readonly><button data-copy="m3u_url">Copiar</button></div></div>
     <p id="mensaje"></p>
   </section>
 </main>
@@ -47,28 +47,46 @@
 const fileInput = document.getElementById("file");
 const statusEl = document.getElementById("status");
 const results = document.getElementById("results");
+const keys = ["estado","asunto","remitente","fecha_correo","username","password","host_url","backup_host_url","m3u_url","mensaje"];
+
 fileInput.addEventListener("change", async () => {
   results.style.display = "none";
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
+
   try {
     const data = JSON.parse(await file.text());
-    for (const key of ["estado","asunto","username","password","host_url","backup_host_url","mensaje"]) {
+    for (const key of keys) {
       const el = document.getElementById(key);
-      el.textContent = data[key] || "—";
+      if (!el) continue;
+      const value = data[key] || "";
+      if (el instanceof HTMLInputElement) el.value = value;
+      else el.textContent = value || "—";
     }
-    document.getElementById("m3u_url").value = data.m3u_url || "";
     results.style.display = "block";
-    statusEl.textContent = "Archivo cargado.";
+    statusEl.textContent = "Archivo cargado correctamente.";
   } catch {
     statusEl.textContent = "No se ha podido leer el JSON. Selecciona el result.json correcto.";
   }
 });
-document.getElementById("copy").addEventListener("click", async () => {
-  const value = document.getElementById("m3u_url").value;
-  if (!value) { statusEl.textContent = "No hay enlace M3U para copiar."; return; }
-  try { await navigator.clipboard.writeText(value); statusEl.textContent = "Enlace copiado."; }
-  catch { document.getElementById("m3u_url").select(); statusEl.textContent = "Selecciona y copia el enlace manualmente."; }
+
+document.querySelectorAll("[data-copy]").forEach(button => {
+  button.addEventListener("click", async () => {
+    const id = button.dataset.copy;
+    const input = document.getElementById(id);
+    const value = input ? input.value : "";
+    if (!value) {
+      statusEl.textContent = "Ese campo está vacío en el resultado.";
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      statusEl.textContent = "Campo copiado.";
+    } catch {
+      input.select();
+      statusEl.textContent = "Selecciona y copia el texto manualmente.";
+    }
+  });
 });
 </script>
 </body>
