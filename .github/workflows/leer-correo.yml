@@ -1,0 +1,34 @@
+name: Leer respuesta M3U de GMX
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  leer-correo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ejecutar lector de correo
+        env:
+          GMX_USER: ${{ secrets.GMX_USER }}
+          GMX_PASS: ${{ secrets.GMX_PASS }}
+        run: python run.py
+
+      - name: Guardar resultado como artefacto privado de la ejecución
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-correo-m3u
+          path: result.json
+          if-no-files-found: error
+          retention-days: 1
