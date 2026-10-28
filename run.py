@@ -72,7 +72,7 @@ def extract_value(body, labels):
 
 def extract_m3u(body):
     decoded = body.replace("&amp;", "&").replace("&#x3D;", "=")
-    urls = re.findall(r"https?://[^\s<>\\"']+", decoded, flags=re.I)
+    urls = re.findall(r"https?://[^\s<>\"']+", decoded, flags=re.I)
 
     for url in urls:
         url = url.rstrip(".,);]")
