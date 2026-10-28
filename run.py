@@ -54,8 +54,8 @@ def get_body(msg):
 
     if html_parts:
         text = "\n".join(html_parts)
-        text = re.sub(r"(?i)<br\s*/?>", "\n", text)
-        text = re.sub(r"(?i)</p\s*>", "\n", text)
+        text = re.sub(r"(?i)<br\\s*/?>", "\n", text)
+        text = re.sub(r"(?i)</p\\s*>", "\n", text)
         return html.unescape(re.sub(r"<[^>]+>", " ", text))
 
     return ""
@@ -64,7 +64,7 @@ def get_body(msg):
 def extract_value(body, labels):
     label_pattern = "|".join(re.escape(label) for label in labels)
     match = re.search(
-        rf"(?im)^\s*(?:{label_pattern})\s*:\s*(.+?)\s*$",
+        rf"(?im)^\\s*(?:{label_pattern})\\s*:\\s*(.+?)\\s*$",
         body
     )
     return match.group(1).strip().rstrip(".,") if match else ""
@@ -72,7 +72,7 @@ def extract_value(body, labels):
 
 def extract_m3u(body):
     decoded = body.replace("&amp;", "&").replace("&#x3D;", "=")
-    urls = re.findall(r"https?://[^\s<>\"']+", decoded, flags=re.I)
+    urls = re.findall(r"https?://[^\\s<>\\\"']+", decoded, flags=re.I)
 
     for url in urls:
         url = url.rstrip(".,);]")
@@ -108,6 +108,64 @@ def save_result(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def parse_candidate(mail, msg_id):
+    """Devuelve los datos extraídos si el mensaje contiene una respuesta M3U reconocible."""
+    status, msg_data = mail.fetch(msg_id, "(RFC822)")
+    if status != "OK":
+        return None
+
+    raw_message = next(
+        (item[1] for item in msg_data if isinstance(item, tuple)),
+        None
+    )
+    if not raw_message:
+        return None
+
+    msg = email.message_from_bytes(raw_message)
+    subject = decode_mime(msg.get("Subject", ""))
+    sender = decode_mime(msg.get("From", ""))
+    body = get_body(msg)
+
+    m3u = extract_m3u(body)
+    username = extract_value(body, ["Username", "User name", "Usuario"])
+    stream_password = extract_value(body, ["Password", "Pass", "Contraseña"])
+    host = extract_value(body, ["Host URL", "Host Url", "Server URL", "Servidor"])
+    backup = extract_value(body, ["Backup Host Url", "Backup Host URL", "Backup URL"])
+
+    # Si el correo no presenta los campos por separado, extraerlos de la URL M3U.
+    url_values = values_from_url(m3u)
+    username = username or url_values["username"]
+    stream_password = stream_password or url_values["password"]
+    host = host or url_values["host_url"]
+
+    body_lower = body.lower()
+    subject_lower = subject.lower()
+    looks_relevant = bool(
+        m3u and (
+            username
+            or host
+            or "xtream" in body_lower
+            or "iptv" in subject_lower
+            or "trial line" in subject_lower
+        )
+    )
+    if not looks_relevant:
+        return None
+
+    return {
+        "estado": "OK",
+        "asunto": subject,
+        "remitente": sender,
+        "fecha_correo": msg.get("Date", ""),
+        "username": username,
+        "password": stream_password,
+        "host_url": host,
+        "backup_host_url": backup,
+        "m3u_url": m3u,
+        "mensaje": "Se ha extraído el enlace M3U y se han completado los campos disponibles desde el correo y su URL."
+    }
+
+
 def main():
     user = os.environ.get("GMX_USER", "").strip()
     password = os.environ.get("GMX_PASS", "")
@@ -135,77 +193,40 @@ def main():
         if status != "OK":
             raise RuntimeError("No se ha podido abrir la bandeja de entrada de GMX.")
 
-        status, data = mail.search(None, "ALL")
-        if status != "OK" or not data or not data[0]:
+        # Primero buscar correos NO LEÍDOS; si no hay uno reconocible,
+        # se revisan después los mensajes recientes de toda la bandeja.
+        status_unseen, unseen_data = mail.search(None, "UNSEEN")
+        unseen_ids = unseen_data[0].split() if status_unseen == "OK" and unseen_data and unseen_data[0] else []
+        unseen_ids = unseen_ids[-MAX_MESSAGES:]
+
+        status_all, all_data = mail.search(None, "ALL")
+        all_ids = all_data[0].split() if status_all == "OK" and all_data and all_data[0] else []
+        all_ids = all_ids[-MAX_MESSAGES:]
+
+        if not all_ids:
             result["mensaje"] = "La bandeja de entrada está vacía."
             save_result(result)
             print(result["mensaje"])
             return
 
-        ids = data[0].split()[-MAX_MESSAGES:]
+        # Los no leídos tienen prioridad absoluta. Después se comprueban
+        # los demás mensajes recientes, sin repetir los identificadores.
+        unseen_set = set(unseen_ids)
+        ordered_ids = list(reversed(unseen_ids))
+        ordered_ids.extend(msg_id for msg_id in reversed(all_ids) if msg_id not in unseen_set)
 
-        for msg_id in reversed(ids):
-            status, msg_data = mail.fetch(msg_id, "(RFC822)")
-            if status != "OK":
-                continue
-
-            raw_message = next(
-                (item[1] for item in msg_data if isinstance(item, tuple)),
-                None
-            )
-            if not raw_message:
-                continue
-
-            msg = email.message_from_bytes(raw_message)
-            subject = decode_mime(msg.get("Subject", ""))
-            sender = decode_mime(msg.get("From", ""))
-            body = get_body(msg)
-
-            m3u = extract_m3u(body)
-            username = extract_value(body, ["Username", "User name", "Usuario"])
-            stream_password = extract_value(body, ["Password", "Pass", "Contraseña"])
-            host = extract_value(body, ["Host URL", "Host Url", "Server URL", "Servidor"])
-            backup = extract_value(body, ["Backup Host Url", "Backup Host URL", "Backup URL"])
-
-            # Si el correo no presenta los campos por separado, intentar extraerlos
-            # de los parámetros de la URL M3U.
-            url_values = values_from_url(m3u)
-            username = username or url_values["username"]
-            stream_password = stream_password or url_values["password"]
-            host = host or url_values["host_url"]
-
-            body_lower = body.lower()
-            subject_lower = subject.lower()
-            looks_relevant = bool(
-                m3u and (
-                    username
-                    or host
-                    or "xtream" in body_lower
-                    or "iptv" in subject_lower
-                    or "trial line" in subject_lower
-                )
-            )
-            if not looks_relevant:
-                continue
-
-            result.update({
-                "estado": "OK",
-                "asunto": subject,
-                "remitente": sender,
-                "fecha_correo": msg.get("Date", ""),
-                "username": username,
-                "password": stream_password,
-                "host_url": host,
-                "backup_host_url": backup,
-                "m3u_url": m3u,
-                "mensaje": "Se ha extraído el enlace M3U y se han completado los campos disponibles desde el correo y su URL."
-            })
-            break
+        for msg_id in ordered_ids:
+            candidate = parse_candidate(mail, msg_id)
+            if candidate:
+                result.update(candidate)
+                if msg_id in unseen_set:
+                    result["mensaje"] += " Se ha priorizado un correo no leído."
+                break
 
         if result["estado"] != "OK":
             result["mensaje"] = (
                 f"No se ha encontrado una respuesta M3U reconocible "
-                f"en los últimos {len(ids)} mensajes revisados."
+                f"en los últimos {len(all_ids)} mensajes revisados."
             )
 
         save_result(result)
