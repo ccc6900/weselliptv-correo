@@ -54,8 +54,8 @@ def get_body(msg):
 
     if html_parts:
         text = "\n".join(html_parts)
-        text = re.sub(r"(?i)<br\\s*/?>", "\n", text)
-        text = re.sub(r"(?i)</p\\s*>", "\n", text)
+        text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+        text = re.sub(r"(?i)</p\s*>", "\n", text)
         return html.unescape(re.sub(r"<[^>]+>", " ", text))
 
     return ""
@@ -64,7 +64,7 @@ def get_body(msg):
 def extract_value(body, labels):
     label_pattern = "|".join(re.escape(label) for label in labels)
     match = re.search(
-        rf"(?im)^\\s*(?:{label_pattern})\\s*:\\s*(.+?)\\s*$",
+        rf"(?im)^\s*(?:{label_pattern})\s*:\s*(.+?)\s*$",
         body
     )
     return match.group(1).strip().rstrip(".,") if match else ""
@@ -72,7 +72,7 @@ def extract_value(body, labels):
 
 def extract_m3u(body):
     decoded = body.replace("&amp;", "&").replace("&#x3D;", "=")
-    urls = re.findall(r"https?://[^\\s<>\\\"']+", decoded, flags=re.I)
+    urls = re.findall(r"https?://[^\s<>\\"']+", decoded, flags=re.I)
 
     for url in urls:
         url = url.rstrip(".,);]")
