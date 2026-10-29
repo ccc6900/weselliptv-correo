@@ -33,10 +33,10 @@
 <body>
   <main class="wrap">
     <h1>Gestor de pruebas IPTV</h1>
-    <p class="lead">Selecciona un correo disponible, ejecuta la lectura en GitHub Actions y consulta aquí los datos recibidos.</p>
+    <p class="lead">El flujo completo se ejecuta en GitHub Actions: Playwright envía el correo y luego se lee la respuesta de GMX.</p>
 
     <div class="actions">
-      <button class="primary" id="next">Usar siguiente correo disponible</button>
+      <button class="primary" id="next">Preparar siguiente correo</button>
       <button class="secondary" id="reload">Actualizar datos</button>
     </div>
 
@@ -76,6 +76,7 @@ function renderEmails(emails, result) {
       ${field('Usuario', r.username)}
       ${field('Contraseña', r.password)}
       ${field('Host', r.host_url)}
+      ${field('Backup', r.backup_host_url)}
       ${field('M3U', r.m3u_url ? `<a href="${r.m3u_url}" target="_blank" rel="noopener">Abrir M3U</a>` : '')}
       ${field('Fecha de uso', item.used_at ? new Date(item.used_at).toLocaleString('es-ES') : '')}
       ${field('Mensaje', r.mensaje)}
@@ -105,18 +106,19 @@ async function loadData() {
 
 document.getElementById('reload').addEventListener('click', loadData);
 
-document.getElementById('next').addEventListener('click', () => {
-  fetch('emails.json')
-    .then(response => response.json())
-    .then(emails => {
-      const next = emails.find(item => item.status === 'disponible');
-      if (!next) {
-        showStatus('No quedan correos disponibles.', true);
-        return;
-      }
-      showStatus(`Correo seleccionado: ${next.email}. Úsalo en WeSellIPTV y después ejecuta el workflow indicando este correo.`);
-      window.open('https://www.weselliptv.com/iptv/free-trial', '_blank', 'noopener');
-    });
+document.getElementById('next').addEventListener('click', async () => {
+  try {
+    const response = await fetch('emails.json');
+    const emails = await response.json();
+    const next = emails.find(item => item.status === 'disponible');
+    if (!next) {
+      showStatus('No quedan correos disponibles.', true);
+      return;
+    }
+    showStatus(`Siguiente correo: ${next.email}. Ve a GitHub Actions → "Flujo completo - Enviar y leer M3U" → Run workflow. El workflow hará todo automáticamente.`);
+  } catch (error) {
+    showStatus('No se pudo leer emails.json.', true);
+  }
 });
 
 loadData();
