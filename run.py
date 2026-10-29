@@ -11,6 +11,7 @@ from email.header import decode_header
 IMAP_HOST = "imap.gmx.es"
 IMAP_PORT = 993
 OUTPUT_FILE = "result.json"
+EMAILS_FILE = "emails.json"
 MAX_MESSAGES = 100
 
 
@@ -89,9 +90,45 @@ def values_from_url(m3u_url):
         return {"username": "", "password": "", "host_url": ""}
 
 
+def load_emails():
+    if not os.path.exists(EMAILS_FILE):
+        return []
+    with open(EMAILS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data if isinstance(data, list) else []
+
+
+def save_emails(data):
+    with open(EMAILS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
 def save_result(data):
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def mark_used_email(email_address, result):
+    if not email_address:
+        return
+    emails = load_emails()
+    now = datetime.now(timezone.utc).isoformat()
+    found = False
+    for item in emails:
+        if item.get("email", "").strip().lower() == email_address.lower():
+            item["status"] = "usado"
+            item["used_at"] = now
+            item["result"] = result
+            found = True
+            break
+    if not found:
+        emails.append({
+            "email": email_address,
+            "status": "usado",
+            "used_at": now,
+            "result": result
+        })
+    save_emails(emails)
 
 
 def fetch_message(mail, msg_id):
@@ -161,12 +198,16 @@ def internal_date(mail, msg_id):
 def main():
     user = os.environ.get("GMX_USER", "").strip()
     password = os.environ.get("GMX_PASS", "")
+    used_email = os.environ.get("USED_EMAIL", "").strip()
+
     if not user or not password:
         raise RuntimeError("Faltan los secretos GMX_USER o GMX_PASS en GitHub Actions.")
 
     result = {
         "estado": "SIN_RESULTADO", "asunto": "", "fecha_correo": "", "remitente": "",
         "username": "", "password": "", "host_url": "", "backup_host_url": "", "m3u_url": "",
+        "correo_usado": used_email,
+        "fecha_procesado": datetime.now(timezone.utc).isoformat(),
         "mensaje": "No se ha encontrado un correo de activación."
     }
 
@@ -187,12 +228,9 @@ def main():
             print(result["mensaje"])
             return
 
-        # Ordenar por fecha interna de GMX, no por estado leído/no leído.
         dated_ids = sorted(ids, key=lambda item: internal_date(mail, item), reverse=True)
         print(f"Mensajes revisados en INBOX: {len(dated_ids)}")
 
-        # Seleccionar primero el correo de activación más reciente. Si no se puede
-        # extraer, informar del problema en vez de devolver silenciosamente uno viejo.
         for msg_id in dated_ids:
             msg = fetch_message(mail, msg_id)
             if msg is None or not message_is_activation(msg):
@@ -208,16 +246,18 @@ def main():
                     "asunto": decode_mime(msg.get("Subject", "")),
                     "fecha_correo": msg.get("Date", ""),
                     "remitente": decode_mime(msg.get("From", "")),
-                    "mensaje": "Se encontró el correo de activación más reciente, pero no se reconoció su enlace M3U ni los campos. No se ha sustituido por un correo antiguo."
+                    "mensaje": "Se encontró el correo de activación más reciente, pero no se reconoció su enlace M3U ni los campos."
                 })
                 print(result["mensaje"])
             break
 
         if result["estado"] == "SIN_RESULTADO":
             result["mensaje"] = f"No se ha encontrado un correo de activación entre los últimos {len(dated_ids)} mensajes de INBOX."
+
         save_result(result)
+        mark_used_email(used_email, result)
         print(f"Estado: {result['estado']}")
-        print("Se ha guardado result.json.")
+        print("Se han guardado result.json y emails.json.")
     finally:
         if mail is not None:
             try:

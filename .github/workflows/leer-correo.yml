@@ -2,9 +2,14 @@ name: Leer respuesta M3U de GMX
 
 on:
   workflow_dispatch:
+    inputs:
+      used_email:
+        description: "Correo utilizado en la solicitud"
+        required: false
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   leer-correo:
@@ -23,9 +28,22 @@ jobs:
         env:
           GMX_USER: ${{ secrets.GMX_USER }}
           GMX_PASS: ${{ secrets.GMX_PASS }}
+          USED_EMAIL: ${{ github.event.inputs.used_email }}
         run: python run.py
 
-      - name: Guardar resultado como artefacto privado de la ejecución
+      - name: Guardar resultado y correos usados en el repositorio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add result.json emails.json
+          if git diff --cached --quiet; then
+            echo "No hay cambios que confirmar."
+          else
+            git commit -m "Actualizar resultado del correo M3U"
+            git push
+          fi
+
+      - name: Guardar resultado como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: resultado-correo-m3u

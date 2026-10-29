@@ -1,26 +1,27 @@
 # weselliptv-correo
 
-Herramienta manual para consultar la bandeja de entrada GMX y extraer los datos de un correo de respuesta M3U. No envía solicitudes al proveedor ni rota alias.
+Gestor visual para consultar la bandeja GMX, extraer los datos del último correo de activación M3U y controlar qué correos ya se han utilizado.
 
 ## Configuración
 
-En **Settings → Secrets and variables → Actions**, crea estos secretos:
+En **Settings → Secrets and variables → Actions**, crea:
 
-- `GMX_USER`: dirección de la cuenta GMX que recibe los mensajes.
-- `GMX_PASS`: contraseña de aplicación o contraseña de la cuenta, según la configuración de GMX.
+- `GMX_USER`: cuenta GMX que recibe los correos.
+- `GMX_PASS`: contraseña de aplicación o contraseña de la cuenta.
 
-No guardes contraseñas ni enlaces M3U reales en los archivos del repositorio.
+No guardes contraseñas ni enlaces M3U en el código.
 
 ## Uso
 
-1. Abre **Actions**.
-2. Selecciona **Leer respuesta M3U de GMX**.
-3. Pulsa **Run workflow**.
-4. Cuando termine, abre la ejecución y descarga el artefacto `resultado-correo-m3u`.
-5. Descomprime el ZIP y abre `index.html` en tu navegador; selecciona el `result.json` descargado.
+1. Edita `emails.json` y añade los correos con `"status": "disponible"`.
+2. Abre `index.html` desde GitHub Pages o desde el repositorio.
+3. Pulsa **Usar siguiente correo disponible**.
+4. Registra ese correo en la página de prueba de WeSellIPTV.
+5. Cuando llegue la respuesta, abre **Actions → Leer respuesta M3U de GMX → Run workflow**.
+6. En `used_email`, pega el correo que acabas de utilizar.
+7. Al terminar, el workflow actualiza `result.json` y marca el correo como `usado` en `emails.json`.
+8. Abre o recarga `index.html` para ver los datos.
 
-El resultado se guarda como artefacto con retención de un día y no se confirma en Git, porque puede contener credenciales.
+## Seguridad
 
-## Límites
-
-El lector revisa hasta los últimos 100 mensajes de la bandeja INBOX y busca un mensaje con un enlace M3U y campos de acceso. El formato del correo puede requerir ajustes. Este proyecto no automatiza solicitudes repetidas ni la rotación de alias para evitar límites de pruebas gratuitas.
+El repositorio es privado, pero `result.json` contiene credenciales IPTV. No lo hagas público ni compartas el repositorio con personas que no deban ver esas credenciales.
