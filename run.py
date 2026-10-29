@@ -36,7 +36,6 @@ def normalize_url(value):
     if not value:
         return ""
     value = value.strip()
-    # "http:// kytv .xyz" -> "http://kytv.xyz"
     value = re.sub(r"\s+", "", value)
     return value
 
@@ -120,6 +119,17 @@ def save_emails(data):
 def save_result(data):
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def pick_next_available_email():
+    """Devuelve el primer correo con status 'disponible' de emails.json, o ''."""
+    emails = load_emails()
+    for item in emails:
+        if str(item.get("status", "")).strip().lower() == "disponible":
+            addr = str(item.get("email", "")).strip()
+            if addr:
+                return addr
+    return ""
 
 
 def mark_used_email(email_address, result):
@@ -213,7 +223,7 @@ def internal_date(mail, msg_id):
         return datetime.min.replace(tzinfo=timezone.utc)
 
 
-def find_latest_activation(mail, used_email=""):
+def find_latest_activation(mail):
     """Devuelve (msg, result_dict) del correo de activación más reciente, o (None, None)."""
     status, data = mail.search(None, "ALL")
     ids = data[0].split() if status == "OK" and data and data[0] else []
@@ -234,14 +244,14 @@ def find_latest_activation(mail, used_email=""):
     return None, None
 
 
-def wait_for_activation(mail, used_email=""):
+def wait_for_activation(mail):
     """Polling de IMAP hasta WAIT_TIMEOUT segundos."""
     start = time.time()
     attempt = 0
     while True:
         attempt += 1
         print(f"Intento {attempt}: buscando correo de activación...")
-        msg, candidate = find_latest_activation(mail, used_email)
+        msg, candidate = find_latest_activation(mail)
         if candidate:
             print("Correo de activación encontrado.")
             return msg, candidate
@@ -251,7 +261,6 @@ def wait_for_activation(mail, used_email=""):
         wait = min(WAIT_INTERVAL, max(1, int(remaining)))
         print(f"No encontrado. Esperando {wait}s (quedan {int(remaining)}s)...")
         time.sleep(wait)
-        # Refrescar INBOX
         try:
             mail.select("INBOX", readonly=True)
         except Exception:
@@ -265,8 +274,13 @@ def main():
 
     if not user or not password:
         raise RuntimeError("Faltan los secretos GMX_USER o GMX_PASS en GitHub Actions.")
+
     if not used_email:
-        raise RuntimeError("Debes indicar el correo utilizado en el input 'used_email' del workflow.")
+        used_email = pick_next_available_email()
+        if used_email:
+            print(f"No se indicó 'used_email'. Se usará el siguiente disponible: {used_email}")
+        else:
+            raise RuntimeError("No hay correos con status 'disponible' en emails.json y no se indicó 'used_email'.")
 
     result = {
         "estado": "SIN_RESULTADO", "asunto": "", "fecha_correo": "", "remitente": "",
@@ -284,9 +298,10 @@ def main():
         if status != "OK":
             raise RuntimeError("No se ha podido abrir la bandeja de entrada de GMX.")
 
-        msg, candidate = wait_for_activation(mail, used_email)
+        msg, candidate = wait_for_activation(mail)
         if candidate:
             result.update(candidate)
+            result["correo_usado"] = used_email
             print("Correo de activación procesado correctamente.")
         else:
             result["mensaje"] = (
