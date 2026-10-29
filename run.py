@@ -14,6 +14,7 @@ IMAP_HOST = "imap.gmx.es"
 IMAP_PORT = 993
 OUTPUT_FILE = "result.json"
 EMAILS_FILE = "emails.json"
+USED_EMAIL_FILE = "used-email.txt"
 MAX_MESSAGES = 100
 WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "300"))
 WAIT_INTERVAL = int(os.environ.get("WAIT_INTERVAL", "20"))
@@ -32,7 +33,6 @@ def decode_mime(value):
 
 
 def normalize_url(value):
-    """Quita espacios internos y alrededor; normaliza esquema."""
     if not value:
         return ""
     value = value.strip()
@@ -121,15 +121,11 @@ def save_result(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def pick_next_available_email():
-    """Devuelve el primer correo con status 'disponible' de emails.json, o ''."""
-    emails = load_emails()
-    for item in emails:
-        if str(item.get("status", "")).strip().lower() == "disponible":
-            addr = str(item.get("email", "")).strip()
-            if addr:
-                return addr
-    return ""
+def read_used_email():
+    if not os.path.exists(USED_EMAIL_FILE):
+        return ""
+    with open(USED_EMAIL_FILE, "r", encoding="utf-8") as f:
+        return f.read().strip()
 
 
 def mark_used_email(email_address, result):
@@ -224,7 +220,6 @@ def internal_date(mail, msg_id):
 
 
 def find_latest_activation(mail):
-    """Devuelve (msg, result_dict) del correo de activación más reciente, o (None, None)."""
     status, data = mail.search(None, "ALL")
     ids = data[0].split() if status == "OK" and data and data[0] else []
     ids = ids[-MAX_MESSAGES:]
@@ -245,7 +240,6 @@ def find_latest_activation(mail):
 
 
 def wait_for_activation(mail):
-    """Polling de IMAP hasta WAIT_TIMEOUT segundos."""
     start = time.time()
     attempt = 0
     while True:
@@ -270,17 +264,15 @@ def wait_for_activation(mail):
 def main():
     user = os.environ.get("GMX_USER", "").strip()
     password = os.environ.get("GMX_PASS", "")
-    used_email = os.environ.get("USED_EMAIL", "").strip()
 
     if not user or not password:
         raise RuntimeError("Faltan los secretos GMX_USER o GMX_PASS en GitHub Actions.")
 
+    used_email = read_used_email()
     if not used_email:
-        used_email = pick_next_available_email()
-        if used_email:
-            print(f"No se indicó 'used_email'. Se usará el siguiente disponible: {used_email}")
-        else:
-            raise RuntimeError("No hay correos con status 'disponible' en emails.json y no se indicó 'used_email'.")
+        raise RuntimeError("No se encontró used-email.txt. ¿Se ejecutó send-email.js correctamente?")
+
+    print(f"Correo usado (desde used-email.txt): {used_email}")
 
     result = {
         "estado": "SIN_RESULTADO", "asunto": "", "fecha_correo": "", "remitente": "",
