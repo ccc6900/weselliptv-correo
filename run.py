@@ -1,18 +1,22 @@
 import os
 import re
 import json
+import time
 import imaplib
 import email
 import html
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, parse_qs
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 
 IMAP_HOST = "imap.gmx.es"
 IMAP_PORT = 993
 OUTPUT_FILE = "result.json"
 EMAILS_FILE = "emails.json"
 MAX_MESSAGES = 100
+WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "300"))
+WAIT_INTERVAL = int(os.environ.get("WAIT_INTERVAL", "20"))
 
 
 def decode_mime(value):
@@ -25,6 +29,16 @@ def decode_mime(value):
         else:
             parts.append(chunk)
     return "".join(parts)
+
+
+def normalize_url(value):
+    """Quita espacios internos y alrededor; normaliza esquema."""
+    if not value:
+        return ""
+    value = value.strip()
+    # "http:// kytv .xyz" -> "http://kytv.xyz"
+    value = re.sub(r"\s+", "", value)
+    return value
 
 
 def get_body(msg):
@@ -144,7 +158,8 @@ def fetch_message(mail, msg_id):
 def message_is_activation(msg):
     subject = decode_mime(msg.get("Subject", "")).lower()
     sender = decode_mime(msg.get("From", "")).lower()
-    keywords = ("iptv", "trial line", "activated", "activation", "subscription", "your line")
+    keywords = ("iptv", "trial line", "trial", "free trial", "activated",
+                "activation", "subscription", "your line")
     return any(word in subject for word in keywords) or ("iptv" in sender) or ("123iptv" in sender)
 
 
@@ -162,6 +177,10 @@ def parse_candidate(msg):
     username = username or url_values["username"]
     stream_password = stream_password or url_values["password"]
     host = host or url_values["host_url"]
+
+    host = normalize_url(host)
+    backup = normalize_url(backup)
+    m3u = normalize_url(m3u)
 
     if not m3u and not (username or host):
         return None
@@ -189,10 +208,54 @@ def internal_date(mail, msg_id):
     if not match:
         return datetime.min.replace(tzinfo=timezone.utc)
     try:
-        from email.utils import parsedate_to_datetime
         return parsedate_to_datetime(match.group(1).decode("ascii"))
     except Exception:
         return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def find_latest_activation(mail, used_email=""):
+    """Devuelve (msg, result_dict) del correo de activación más reciente, o (None, None)."""
+    status, data = mail.search(None, "ALL")
+    ids = data[0].split() if status == "OK" and data and data[0] else []
+    ids = ids[-MAX_MESSAGES:]
+    if not ids:
+        return None, None
+
+    dated_ids = sorted(ids, key=lambda item: internal_date(mail, item), reverse=True)
+    print(f"Mensajes revisados en INBOX: {len(dated_ids)}")
+
+    for msg_id in dated_ids:
+        msg = fetch_message(mail, msg_id)
+        if msg is None or not message_is_activation(msg):
+            continue
+        candidate = parse_candidate(msg)
+        if candidate:
+            return msg, candidate
+    return None, None
+
+
+def wait_for_activation(mail, used_email=""):
+    """Polling de IMAP hasta WAIT_TIMEOUT segundos."""
+    start = time.time()
+    attempt = 0
+    while True:
+        attempt += 1
+        print(f"Intento {attempt}: buscando correo de activación...")
+        msg, candidate = find_latest_activation(mail, used_email)
+        if candidate:
+            print("Correo de activación encontrado.")
+            return msg, candidate
+        if time.time() - start >= WAIT_TIMEOUT:
+            return None, None
+        remaining = WAIT_TIMEOUT - (time.time() - start)
+        wait = min(WAIT_INTERVAL, max(1, int(remaining)))
+        print(f"No encontrado. Esperando {wait}s (quedan {int(remaining)}s)...")
+        time.sleep(wait)
+        # Refrescar INBOX
+        try:
+            mail.select("INBOX", readonly=True)
+        except Exception:
+            pass
 
 
 def main():
@@ -202,6 +265,8 @@ def main():
 
     if not user or not password:
         raise RuntimeError("Faltan los secretos GMX_USER o GMX_PASS en GitHub Actions.")
+    if not used_email:
+        raise RuntimeError("Debes indicar el correo utilizado en el input 'used_email' del workflow.")
 
     result = {
         "estado": "SIN_RESULTADO", "asunto": "", "fecha_correo": "", "remitente": "",
@@ -219,40 +284,16 @@ def main():
         if status != "OK":
             raise RuntimeError("No se ha podido abrir la bandeja de entrada de GMX.")
 
-        status, data = mail.search(None, "ALL")
-        ids = data[0].split() if status == "OK" and data and data[0] else []
-        ids = ids[-MAX_MESSAGES:]
-        if not ids:
-            result["mensaje"] = "La bandeja de entrada está vacía."
-            save_result(result)
+        msg, candidate = wait_for_activation(mail, used_email)
+        if candidate:
+            result.update(candidate)
+            print("Correo de activación procesado correctamente.")
+        else:
+            result["mensaje"] = (
+                f"No se ha encontrado un correo de activación en {WAIT_TIMEOUT}s "
+                f"para {used_email}."
+            )
             print(result["mensaje"])
-            return
-
-        dated_ids = sorted(ids, key=lambda item: internal_date(mail, item), reverse=True)
-        print(f"Mensajes revisados en INBOX: {len(dated_ids)}")
-
-        for msg_id in dated_ids:
-            msg = fetch_message(mail, msg_id)
-            if msg is None or not message_is_activation(msg):
-                continue
-
-            candidate = parse_candidate(msg)
-            if candidate:
-                result.update(candidate)
-                print("Correo de activación más reciente procesado correctamente.")
-            else:
-                result.update({
-                    "estado": "NO_EXTRAIDO",
-                    "asunto": decode_mime(msg.get("Subject", "")),
-                    "fecha_correo": msg.get("Date", ""),
-                    "remitente": decode_mime(msg.get("From", "")),
-                    "mensaje": "Se encontró el correo de activación más reciente, pero no se reconoció su enlace M3U ni los campos."
-                })
-                print(result["mensaje"])
-            break
-
-        if result["estado"] == "SIN_RESULTADO":
-            result["mensaje"] = f"No se ha encontrado un correo de activación entre los últimos {len(dated_ids)} mensajes de INBOX."
 
         save_result(result)
         mark_used_email(used_email, result)
