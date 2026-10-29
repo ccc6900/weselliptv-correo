@@ -1,6 +1,42 @@
 [
   {
-    "email": "correo1@gmx.es",
+    "email": "auto.notifier.es@gmx.es",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "bot.service.app@gmx.es",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "compras.descuentos@gmx.es",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "cuenta.secundaria@gmx.es",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "egistro.temp.es@gmx.es",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "ofertas.tracker@gmx.es",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "pedidos.online.es@gmx.es",
     "status": "disponible",
     "used_at": null,
     "result": null
