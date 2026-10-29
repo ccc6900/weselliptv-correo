@@ -5,10 +5,10 @@
   "remitente": "WeSelllPTV <contact@weselliptv.com>",
   "username": "NUTJS37B68",
   "password": "NUTJSA654A",
-  "host_url": "http:// kytv .xyz",
-  "backup_host_url": "http:// kemotvpromax .xyz",
+  "host_url": "http://kytv.xyz",
+  "backup_host_url": "http://kemotvpromax.xyz",
   "m3u_url": "",
-  "correo_usado": "",
-  "fecha_procesado": "2026-10-29T09:52:45.237267+00:00",
+  "correo_usado": "auto.notifier.es@gmx.es",
+  "fecha_procesado": "2026-10-29T12:30:58.609363+00:00",
   "mensaje": "Datos extraídos del correo de activación más reciente."
 }
