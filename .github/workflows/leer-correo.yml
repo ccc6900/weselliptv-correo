@@ -5,16 +5,20 @@ on:
     inputs:
       used_email:
         description: "Correo utilizado en la solicitud"
-        required: false
+        required: true
         type: string
 
 permissions:
   contents: write
 
+env:
+  WAIT_TIMEOUT: "300"
+  WAIT_INTERVAL: "20"
+
 jobs:
   leer-correo:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
