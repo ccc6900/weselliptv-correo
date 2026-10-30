@@ -4,6 +4,9 @@ import fs from 'fs';
 const TARGET_URL = 'https://www.weselliptv.com/iptv/free-trial';
 const EMAILS_FILE = 'emails.json';
 
+// Función para esperar un tiempo aleatorio entre min y max milisegundos
+const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
 function pickNextAvailable() {
   if (!fs.existsSync(EMAILS_FILE)) throw new Error('No existe emails.json');
   const emails = JSON.parse(fs.readFileSync(EMAILS_FILE, 'utf-8'));
@@ -33,79 +36,76 @@ async function main() {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
 
-  // Log de todas las peticiones para diagnóstico
-  page.on('request', req => {
-    if (req.method() !== 'GET') {
-      console.log(`[REQ] ${req.method()} ${req.url()}`);
-    }
-  });
-  page.on('response', res => {
-    if (res.request().method() !== 'GET') {
-      console.log(`[RES] ${res.status()} ${res.url()}`);
-    }
-  });
-
   try {
+    console.log('Abriendo página...');
     await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(randomDelay(3000, 5000)); // Espera inicial humana
 
     const emailInput = page.locator('input[type="email"]').first()
       .or(page.locator('input[name="email"]').first())
       .or(page.locator('input[placeholder*="mail" i]').first());
     await emailInput.waitFor({ state: 'visible', timeout: 15000 });
-    await emailInput.fill(email);
-    console.log('Email rellenado.');
 
-    // Esperar a que la validación check-email termine
-    await page.waitForTimeout(2000);
+    // 1. Escribir carácter por carácter (simula tecleo humano)
+    console.log('Escribiendo correo...');
+    await emailInput.click();
+    await page.waitForTimeout(randomDelay(200, 500));
+    await emailInput.pressSequentially(email, { delay: randomDelay(50, 150) }); 
+    await page.waitForTimeout(randomDelay(1000, 2000)); // Pausa tras escribir
 
-    // Selector del botón corregido: incluye "try for free"
-    const submitButton = page.getByRole('button', { name: /try for free|try|submit|send|start|get trial|enviar|obtener/i }).first();
+    // 2. Localizar botón y mover el ratón hacia él (simula movimiento humano)
+    const submitButton = page.getByRole('button', { name: /try for free/i }).first();
     await submitButton.waitFor({ state: 'visible', timeout: 10000 });
-    console.log('Botón encontrado. Esperando a que esté habilitado...');
-    await submitButton.waitFor({ state: 'attached', timeout: 5000 });
+    
+    console.log('Moviendo el ratón hacia el botón...');
+    const buttonBox = await submitButton.boundingBox();
+    if (buttonBox) {
+      // Movimiento en dos pasos para no ser una línea recta perfecta
+      await page.mouse.move(
+        buttonBox.x + buttonBox.width / 2 + randomDelay(-20, 20),
+        buttonBox.y + buttonBox.height / 2 + randomDelay(-20, 20),
+        { steps: 5 }
+      );
+      await page.waitForTimeout(randomDelay(300, 800));
+    }
 
-    // Esperar la petición POST real de envío
-    console.log('Pulsando botón y esperando petición POST...');
-    const responsePromise = page.waitForResponse(response => {
-      const req = response.request();
-      return req.method() === 'POST' && !response.url().includes('check-email');
-    }, { timeout: 20000 });
+    // 3. Preparar para escuchar la respuesta de éxito
+    console.log('Haciendo clic y esperando confirmación...');
+    
+    // Esperamos que aparezca el texto de éxito "Check Your Inbox!" o similar
+    const successPromise = page.waitForSelector('text="Check Your Inbox!"', { timeout: 20000 }).catch(() => null);
+    // O que aparezca un mensaje de error por si acaso
+    const errorPromise = page.waitForSelector('text=/already|invalid|error/i', { timeout: 20000 }).catch(() => null);
 
     await submitButton.click();
 
-    let networkOk = false;
-    let responseStatus = 0;
-    try {
-      const response = await responsePromise;
-      responseStatus = response.status();
-      console.log(`Petición POST detectada: ${responseStatus} ${response.url()}`);
-      if (responseStatus >= 200 && responseStatus < 400) {
-        networkOk = true;
-      }
-    } catch (e) {
-      console.log('No se detectó ninguna petición POST tras el clic.');
-    }
+    // Carrera: ¿Qué aparece primero? ¿Éxito o error?
+    const result = await Promise.race([successPromise, errorPromise]);
 
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(2000); // Pausa final para la captura
     await page.screenshot({ path: 'send-result.png', fullPage: true });
     console.log('Captura guardada: send-result.png');
 
-    // Comprobar también el texto de la página por si hay mensaje de éxito o error
-    const bodyText = await page.locator('body').innerText();
-    const successKeywords = ['check your inbox', 'check your email', 'revisa tu correo', 'sent', 'enviado', 'trial is ready'];
-    const errorKeywords = ['already', 'invalid', 'error', 'failed', 'ya existe', 'inválido'];
-    const hasSuccess = successKeywords.some(kw => bodyText.toLowerCase().includes(kw));
-    const hasError = errorKeywords.some(kw => bodyText.toLowerCase().includes(kw));
-    console.log(`Mensaje de éxito detectado: ${hasSuccess}`);
-    console.log(`Mensaje de error detectado: ${hasError}`);
-
-    if (networkOk || hasSuccess) {
-      fs.writeFileSync('used-email.txt', email, 'utf-8');
-      console.log(`Correo usado guardado: ${email}`);
+    if (result) {
+      const text = await result.innerText().catch(() => '');
+      if (text.includes('Check Your Inbox') || text.includes('Email sent')) {
+        console.log('✅ ¡Éxito! La página muestra "Check Your Inbox!".');
+        fs.writeFileSync('used-email.txt', email, 'utf-8');
+        console.log(`Correo usado guardado: ${email}`);
+      } else {
+        console.log(`⚠️ La página mostró un mensaje inesperado: "${text}"`);
+        process.exit(1);
+      }
     } else {
-      console.error('FALLO: No se confirmó el envío. Revisa send-result.png');
-      process.exit(1);
+      // Si no detectamos ni éxito ni error, comprobamos si el formulario desapareció
+      const emailInputVisible = await emailInput.isVisible();
+      if (!emailInputVisible) {
+        console.log('✅ ¡Éxito! El formulario desapareció de la vista.');
+        fs.writeFileSync('used-email.txt', email, 'utf-8');
+      } else {
+        console.log('❌ No se detectó ni éxito ni error. Revisa send-result.png');
+        process.exit(1);
+      }
     }
 
   } catch (error) {
