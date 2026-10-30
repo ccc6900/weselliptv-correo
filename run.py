@@ -10,11 +10,15 @@ from urllib.parse import urlsplit, parse_qs, urlencode
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
-IMAP_HOST = "imap.gmx.es"
+# --- CONFIGURACIÓN PARA GMAIL ---
+IMAP_HOST = "imap.gmail.com"
 IMAP_PORT = 993
+# --------------------------------
+
 OUTPUT_FILE = "result.json"
 EMAILS_FILE = "emails.json"
 USED_EMAIL_FILE = "used-email.txt"
+DEBUG_FILE = "debug-correo.txt"
 MAX_MESSAGES = 100
 WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "600"))
 WAIT_INTERVAL = int(os.environ.get("WAIT_INTERVAL", "30"))
@@ -104,18 +108,12 @@ def values_from_url(m3u_url):
 
 
 def construir_m3u(host, username, password, tipo="m3u_plus"):
-    """Genera un enlace M3U estándar a partir de los datos del correo."""
     if not host or not username or not password:
         return ""
     if not host.startswith(("http://", "https://")):
         host = "http://" + host
     host = host.rstrip("/")
-    
-    params = {
-        "username": username,
-        "password": password,
-        "type": tipo
-    }
+    params = {"username": username, "password": password, "type": tipo}
     return f"{host}/get.php?{urlencode(params)}"
 
 
@@ -190,10 +188,11 @@ def parse_candidate(msg):
     sender = decode_mime(msg.get("From", ""))
     body = get_body(msg)
     m3u = extract_m3u(body)
-    username = extract_value(body, ["Username", "User name", "Usuario"])
-    stream_password = extract_value(body, ["Password", "Pass", "Contraseña"])
-    host = extract_value(body, ["Host URL", "Host Url", "Server URL", "Servidor"])
-    backup = extract_value(body, ["Backup Host Url", "Backup Host URL", "Backup URL"])
+    
+    username = extract_value(body, ["Username", "User name", "Usuario", "User"])
+    stream_password = extract_value(body, ["Password", "Pass", "Contraseña", "Pass:"])
+    host = extract_value(body, ["Host URL", "Host Url", "Host", "Server URL", "Server", "Servidor", "Domain", "URL", "Dominio"])
+    backup = extract_value(body, ["Backup Host Url", "Backup Host URL", "Backup URL", "Backup"])
 
     url_values = values_from_url(m3u)
     username = username or url_values["username"]
@@ -204,12 +203,23 @@ def parse_candidate(msg):
     backup = normalize_url(backup)
     m3u = normalize_url(m3u)
 
+    if not m3u or not host or not username:
+        with open(DEBUG_FILE, "w", encoding="utf-8") as f:
+            f.write(f"--- ASUNTO: {subject}\n")
+            f.write(f"--- REMITENTE: {sender}\n")
+            f.write(f"--- HOST EXTRAIDO: '{host}'\n")
+            f.write(f"--- USER EXTRAIDO: '{username}'\n")
+            f.write(f"--- PASS EXTRAIDA: '{stream_password}'\n")
+            f.write("--- CUERPO DEL CORREO ---\n")
+            f.write(body)
+        print(f"[DEBUG] Datos incompletos. Cuerpo del correo guardado en {DEBUG_FILE}")
+
     if not m3u and not (username or host):
         return None
 
-    # Si el correo no trae el enlace M3U, lo construimos con los datos
     if not m3u and username and stream_password and host:
         m3u = construir_m3u(host, username, stream_password, "m3u_plus")
+        print(f"[+] M3U construido automáticamente: {m3u}")
 
     return {
         "estado": "OK",
@@ -308,7 +318,7 @@ def main():
         mail.login(user, password)
         status, _ = mail.select("INBOX", readonly=True)
         if status != "OK":
-            raise RuntimeError("No se ha podido abrir la bandeja de entrada de GMX.")
+            raise RuntimeError("No se ha podido abrir la bandeja de entrada de Gmail.")
 
         msg, candidate = wait_for_activation(mail)
         if candidate:
