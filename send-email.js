@@ -3,15 +3,14 @@ import fs from 'fs';
 
 const TARGET_URL = 'https://www.weselliptv.com/iptv/free-trial';
 const EMAILS_FILE = 'emails.json';
-
-// Función para esperar un tiempo aleatorio entre min y max milisegundos
 const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 function pickNextAvailable() {
   if (!fs.existsSync(EMAILS_FILE)) throw new Error('No existe emails.json');
   const emails = JSON.parse(fs.readFileSync(EMAILS_FILE, 'utf-8'));
+  // Filtramos ESTRICTAMENTE por los que están disponibles
   const next = emails.find(item => item.status === 'disponible');
-  if (!next) throw new Error('No hay correos con status "disponible"');
+  if (!next) throw new Error('No hay correos con status "disponible" en emails.json');
   return next.email;
 }
 
@@ -39,28 +38,25 @@ async function main() {
   try {
     console.log('Abriendo página...');
     await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(randomDelay(3000, 5000)); // Espera inicial humana
+    await page.waitForTimeout(randomDelay(3000, 5000));
 
     const emailInput = page.locator('input[type="email"]').first()
       .or(page.locator('input[name="email"]').first())
       .or(page.locator('input[placeholder*="mail" i]').first());
     await emailInput.waitFor({ state: 'visible', timeout: 15000 });
 
-    // 1. Escribir carácter por carácter (simula tecleo humano)
     console.log('Escribiendo correo...');
     await emailInput.click();
     await page.waitForTimeout(randomDelay(200, 500));
     await emailInput.pressSequentially(email, { delay: randomDelay(50, 150) }); 
-    await page.waitForTimeout(randomDelay(1000, 2000)); // Pausa tras escribir
+    await page.waitForTimeout(randomDelay(1000, 2000));
 
-    // 2. Localizar botón y mover el ratón hacia él (simula movimiento humano)
     const submitButton = page.getByRole('button', { name: /try for free/i }).first();
     await submitButton.waitFor({ state: 'visible', timeout: 10000 });
     
     console.log('Moviendo el ratón hacia el botón...');
     const buttonBox = await submitButton.boundingBox();
     if (buttonBox) {
-      // Movimiento en dos pasos para no ser una línea recta perfecta
       await page.mouse.move(
         buttonBox.x + buttonBox.width / 2 + randomDelay(-20, 20),
         buttonBox.y + buttonBox.height / 2 + randomDelay(-20, 20),
@@ -69,22 +65,15 @@ async function main() {
       await page.waitForTimeout(randomDelay(300, 800));
     }
 
-    // 3. Preparar para escuchar la respuesta de éxito
     console.log('Haciendo clic y esperando confirmación...');
-    
-    // Esperamos que aparezca el texto de éxito "Check Your Inbox!" o similar
     const successPromise = page.waitForSelector('text="Check Your Inbox!"', { timeout: 20000 }).catch(() => null);
-    // O que aparezca un mensaje de error por si acaso
     const errorPromise = page.waitForSelector('text=/already|invalid|error/i', { timeout: 20000 }).catch(() => null);
 
     await submitButton.click();
 
-    // Carrera: ¿Qué aparece primero? ¿Éxito o error?
     const result = await Promise.race([successPromise, errorPromise]);
-
-    await page.waitForTimeout(2000); // Pausa final para la captura
+    await page.waitForTimeout(2000);
     await page.screenshot({ path: 'send-result.png', fullPage: true });
-    console.log('Captura guardada: send-result.png');
 
     if (result) {
       const text = await result.innerText().catch(() => '');
@@ -97,7 +86,6 @@ async function main() {
         process.exit(1);
       }
     } else {
-      // Si no detectamos ni éxito ni error, comprobamos si el formulario desapareció
       const emailInputVisible = await emailInput.isVisible();
       if (!emailInputVisible) {
         console.log('✅ ¡Éxito! El formulario desapareció de la vista.');
