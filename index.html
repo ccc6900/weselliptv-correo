@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gestor de pruebas IPTV</title>
   <style>
-    :root { color-scheme: dark; --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8; --green:#22c55e; --yellow:#eab308; --red:#ef4444; }
+    :root { color-scheme: dark; --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8; --green:#22c55e; --yellow:#eab308; --red:#ef4444; --blue:#2563eb; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
     .wrap { max-width:1100px; margin:0 auto; padding:32px 20px 64px; }
     h1 { font-size:28px; margin:0 0 6px; }
     p.lead { color:var(--muted); margin:0 0 28px; }
     .actions { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:28px; }
-    button { border:0; border-radius:10px; padding:12px 18px; font-weight:600; cursor:pointer; }
-    .primary { background:#2563eb; color:white; }
+    button { border:0; border-radius:10px; padding:12px 18px; font-weight:600; cursor:pointer; font-size:14px; transition: 0.2s; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .primary { background:var(--blue); color:white; }
+    .primary:hover:not(:disabled) { background:#1d4ed8; }
     .secondary { background:var(--card); color:var(--text); border:1px solid var(--line); }
+    .secondary:hover:not(:disabled) { background:#334155; }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
     .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
     .card h3 { margin:0 0 10px; font-size:17px; word-break:break-all; }
@@ -27,16 +30,20 @@
     .value { word-break:break-all; }
     a { color:#93c5fd; }
     .empty { color:var(--muted); text-align:center; padding:40px; border:1px dashed var(--line); border-radius:14px; }
-    .status { margin-top:18px; padding:12px 14px; border-radius:10px; background:var(--card); border:1px solid var(--line); display:none; }
+    .status { margin-top:18px; padding:16px; border-radius:10px; background:var(--card); border:1px solid var(--line); display:none; font-weight:500; }
+    .status.error { border-color: var(--red); background: #450a0a; }
+    .status.success { border-color: var(--green); background: #052e16; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <main class="wrap">
     <h1>Gestor de pruebas IPTV</h1>
-    <p class="lead">El flujo completo se ejecuta en GitHub Actions: Playwright envía el correo y luego se lee la respuesta de GMX.</p>
+    <p class="lead">Haz clic en "Nueva prueba" para lanzar el workflow automático. La página se actualizará sola cuando termine.</p>
 
     <div class="actions">
-      <button class="primary" id="next">Preparar siguiente correo</button>
+      <button class="primary" id="next">Nueva prueba (Auto)</button>
       <button class="secondary" id="reload">Actualizar datos</button>
     </div>
 
@@ -45,13 +52,57 @@
   </main>
 
 <script>
+// ==========================================
+// CONFIGURACIÓN: CAMBIA ESTO CON TU USUARIO Y REPO
+// ==========================================
+const GITHUB_USER = 'TU_USUARIO'; 
+const GITHUB_REPO = 'weselliptv-correo'; 
+const GITHUB_BRANCH = 'main';
+// ==========================================
+
 const statusBox = document.getElementById('status');
 const results = document.getElementById('results');
+const nextBtn = document.getElementById('next');
 
-function showStatus(text, isError = false) {
+let pollingInterval = null;
+let initialUsedCount = -1;
+
+function showStatus(text, type = 'info') {
   statusBox.style.display = 'block';
-  statusBox.textContent = text;
-  statusBox.style.borderColor = isError ? '#ef4444' : '#334155';
+  statusBox.innerHTML = text;
+  statusBox.className = 'status ' + type;
+}
+
+async function loadData(isPolling = false) {
+  try {
+    // Añadimos un timestamp para evitar la caché del navegador
+    const t = Date.now();
+    const [emailsRes, resultRes] = await Promise.all([
+      fetch(`emails.json?t=${t}`),
+      fetch(`result.json?t=${t}`)
+    ]);
+    const emails = await emailsRes.json();
+    let result = null;
+    if (resultRes.ok) result = await resultRes.json();
+    
+    renderEmails(emails, result);
+
+    // Si estamos en modo polling, comprobamos si ha terminado
+    if (isPolling) {
+      const currentUsedCount = emails.filter(e => e.status === 'usado').length;
+      // Si el número de usados ha aumentado, o el resultado tiene estado OK, hemos terminado
+      if (currentUsedCount > initialUsedCount || (result && result.estado === 'OK')) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        nextBtn.disabled = false;
+        nextBtn.innerHTML = 'Nueva prueba (Auto)';
+        showStatus(`✅ ¡Proceso completado! Revisa los datos abajo.`, 'success');
+      }
+    }
+  } catch (error) {
+    if (!isPolling) showStatus('No se pudieron cargar los datos. Revisa la consola.', 'error');
+    console.error(error);
+  }
 }
 
 function field(label, value) {
@@ -84,44 +135,43 @@ function renderEmails(emails, result) {
     results.appendChild(card);
   });
 
-  if (result) {
-    showStatus(`Última lectura: ${result.estado}. ${result.mensaje || ''}`);
-  }
-}
-
-async function loadData() {
-  try {
-    const [emailsRes, resultRes] = await Promise.all([
-      fetch('emails.json'),
-      fetch('result.json')
-    ]);
-    const emails = await emailsRes.json();
-    let result = null;
-    if (resultRes.ok) result = await resultRes.json();
-    renderEmails(emails, result);
-  } catch (error) {
-    showStatus('No se pudieron cargar emails.json o result.json.', true);
-  }
-}
-
-document.getElementById('reload').addEventListener('click', loadData);
-
-document.getElementById('next').addEventListener('click', async () => {
-  try {
-    const response = await fetch('emails.json');
-    const emails = await response.json();
-    const next = emails.find(item => item.status === 'disponible');
-    if (!next) {
-      showStatus('No quedan correos disponibles.', true);
-      return;
+  // Si no estamos haciendo polling, mostramos el estado del último result.json
+  if (result && !pollingInterval) {
+    if (result.estado === 'OK') {
+      showStatus(`Última lectura: <b>${result.estado}</b>. Correo: ${result.correo_usado}`, 'success');
+    } else {
+      showStatus(`Última lectura: <b>${result.estado}</b>. ${result.mensaje || ''}`, 'error');
     }
-    showStatus(`Siguiente correo: ${next.email}. Ve a GitHub Actions → "Flujo completo - Enviar y leer M3U" → Run workflow. El workflow hará todo automáticamente.`);
-  } catch (error) {
-    showStatus('No se pudo leer emails.json.', true);
   }
+}
+
+document.getElementById('reload').addEventListener('click', () => loadData(false));
+
+nextBtn.addEventListener('click', async () => {
+  if (pollingInterval) return;
+
+  // 1. Abrir la pestaña de GitHub Actions para que el usuario le dé a "Run workflow"
+  const actionsUrl = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/actions/workflows/full-flow.yml`;
+  window.open(actionsUrl, '_blank', 'noopener');
+  
+  // 2. Poner la interfaz en modo espera
+  nextBtn.disabled = true;
+  nextBtn.innerHTML = '<span class="spinner"></span> Esperando workflow...';
+  showStatus('Pestaña de GitHub abierta. Pulsa "Run workflow" allí. Esta página se actualizará sola cuando termine.', 'info');
+
+  // 3. Iniciar polling
+  try {
+    const t = Date.now();
+    const emails = await fetch(`emails.json?t=${t}`).then(r => r.json());
+    initialUsedCount = emails.filter(e => e.status === 'usado').length;
+  } catch (e) {
+    initialUsedCount = -1;
+  }
+
+  pollingInterval = setInterval(() => loadData(true), 5000);
 });
 
-loadData();
+loadData(false);
 </script>
 </body>
 </html>
