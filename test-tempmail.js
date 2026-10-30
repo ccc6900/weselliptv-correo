@@ -2,146 +2,129 @@ import { chromium } from 'playwright';
 
 const MAILTM_API = 'https://api.mail.tm';
 
-async function crearCorreoTemporal() {
-  const domainsRes = await fetch(`${MAILTM_API}/domains`);
-  const domainsData = await domainsRes.json();
-  const domain = domainsData['hydra:member'][0].domain;
-  console.log(`Dominio disponible: ${domain}`);
+// Función para esperar un tiempo
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const username = `test${Date.now()}`;
+async function obtenerDominios() {
+  const res = await fetch(`${MAILTM_API}/domains`);
+  const data = await res.json();
+  // La API devuelve los dominios en 'hydra:member'
+  return data['hydra:member'].map(d => d.domain);
+}
+
+async function crearCuenta(domain) {
+  const username = `test${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const password = 'password123';
   const address = `${username}@${domain}`;
 
-  const accountRes = await fetch(`${MAILTM_API}/accounts`, {
+  const res = await fetch(`${MAILTM_API}/accounts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address, password })
   });
 
-  if (!accountRes.ok) {
-    throw new Error(`Error creando cuenta: ${accountRes.status}`);
-  }
-
-  console.log(`Correo temporal creado: ${address}`);
+  if (!res.ok) return null; // Si falla la creación, pasamos al siguiente
 
   const tokenRes = await fetch(`${MAILTM_API}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address, password })
   });
-
   const tokenData = await tokenRes.json();
-  const token = tokenData.token;
-  console.log(`Token obtenido.`);
 
-  return { address, token };
+  return { address, token: tokenData.token };
 }
 
-async function usarEnWeb(email) {
-  // --- COPIA EXACTA DE LA CONFIGURACIÓN DE SEND-EMAIL.JS ---
+async function probarEnWeb(email) {
   const browser = await chromium.launch({
     headless: true,
     args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage'],
   });
-
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     viewport: { width: 1366, height: 768 },
     locale: 'es-ES',
     timezoneId: 'Europe/Madrid',
   });
-
   const page = await context.newPage();
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
-  // ---------------------------------------------------------
 
   try {
-    console.log('Abriendo página...');
     await page.goto('https://www.weselliptv.com/iptv/free-trial', { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(5000); // Damos más tiempo por si tarda en cargar
-
-    // Intentamos varios selectores por si acaso
+    await page.waitForTimeout(3000);
+    
     const emailInput = page.locator('input[type="email"]').first()
       .or(page.locator('input[name="email"]').first())
       .or(page.locator('input[placeholder*="mail" i]').first());
-      
     await emailInput.waitFor({ state: 'visible', timeout: 15000 });
     await emailInput.fill(email);
-    console.log(`Email rellenado: ${email}`);
-
+    
     const submitButton = page.getByRole('button', { name: /try for free/i }).first();
     await submitButton.click();
-    console.log('Botón pulsado. Esperando respuesta...');
-
-    await page.waitForTimeout(5000);
-
+    
+    await page.waitForTimeout(4000);
+    
     const bodyText = await page.locator('body').innerText();
     if (bodyText.includes('Check Your Inbox') || bodyText.includes('Email sent')) {
-      console.log('✅ WeSellIPTV dice que ha enviado el correo.');
-      return true;
-    } else if (bodyText.toLowerCase().includes('already') || bodyText.toLowerCase().includes('trial')) {
-      console.log('⚠️ WeSellIPTV rechaza este correo (ya usado o dominio bloqueado).');
-      return false;
-    } else {
-      console.log('❓ Respuesta inesperada. Revisa la captura.');
-      await page.screenshot({ path: 'tempmail-result.png', fullPage: true });
-      return false;
+      return true; // La web dice que lo ha enviado
     }
-  } catch (error) {
-    console.error('ERROR durante el envío:', error.message);
-    try { await page.screenshot({ path: 'tempmail-error.png', fullPage: true }); } catch (e) {}
+    return false; // La web lo rechazó o mostró otro mensaje
+  } catch (e) {
     return false;
   } finally {
     await browser.close();
   }
 }
 
-async function esperarCorreo(token, maxIntentos = 12, intervalo = 10000) {
-  for (let i = 1; i <= maxIntentos; i++) {
-    console.log(`Intento ${i}/${maxIntentos}: consultando mail.tm...`);
-    
+async function esperarCorreo(token, maxIntentos = 6, intervalo = 5000) {
+  for (let i = 0; i < maxIntentos; i++) {
+    await sleep(intervalo);
     const res = await fetch(`${MAILTM_API}/messages`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    
     const data = await res.json();
-    
     if (data['hydra:member'] && data['hydra:member'].length > 0) {
-      const msg = data['hydra:member'][0];
-      console.log(`✅ ¡Correo recibido! Asunto: ${msg.subject}`);
-      
-      const msgRes = await fetch(`${MAILTM_API}/messages/${msg.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const msgData = await msgRes.json();
-      console.log(`Contenido (primeros 500 chars):`);
-      console.log((msgData.text || msgData.html || '').substring(0, 500));
-      
-      return true;
-    }
-    
-    if (i < maxIntentos) {
-      await new Promise(r => setTimeout(r, intervalo));
+      return true; // ¡Correo recibido!
     }
   }
-  
-  console.log('❌ No ha llegado ningún correo en el tiempo de espera.');
   return false;
 }
 
 async function main() {
-  const { address, token } = await crearCorreoTemporal();
-  
-  const enviado = await usarEnWeb(address);
-  
-  if (enviado) {
-    console.log('Esperando correo en mail.tm (hasta 2 minutos)...');
-    await esperarCorreo(token);
-  } else {
-    console.log('WeSellIPTV no aceptó el correo. No tiene sentido esperar.');
+  console.log('Obteniendo lista de dominios de mail.tm...');
+  const dominios = await obtenerDominios();
+  console.log(`Dominios encontrados: ${dominios.length}`);
+
+  for (const domain of dominios) {
+    console.log(`\n--- Probando dominio: ${domain} ---`);
+    
+    const cuenta = await crearCuenta(domain);
+    if (!cuenta) {
+      console.log(`No se pudo crear cuenta con ${domain}. Saltando.`);
+      continue;
+    }
+    console.log(`Cuenta creada: ${cuenta.address}`);
+
+    const enviado = await probarEnWeb(cuenta.address);
+    if (!enviado) {
+      console.log(`WeSellIPTV rechazó el correo con ${domain}. Saltando.`);
+      continue;
+    }
+    console.log(`WeSellIPTV aceptó el correo. Esperando que llegue a mail.tm...`);
+
+    const recibido = await esperarCorreo(cuenta.token);
+    if (recibido) {
+      console.log(`\n✅ ¡ÉXITO! El dominio que funciona es: ${domain}`);
+      console.log(`Puedes usar este dominio en tu flujo principal.`);
+      return; // Terminamos, hemos encontrado uno que funciona
+    } else {
+      console.log(`El correo no llegó a mail.tm con ${domain}. Saltando.`);
+    }
   }
+
+  console.log('\n❌ Ningún dominio de mail.tm ha funcionado. WeSellIPTV los bloquea todos.');
 }
 
 main().catch(console.error);
