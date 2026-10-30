@@ -1,177 +1,178 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gestor de pruebas IPTV</title>
-  <style>
-    :root { color-scheme: dark; --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8; --green:#22c55e; --yellow:#eab308; --red:#ef4444; --blue:#2563eb; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
-    .wrap { max-width:1100px; margin:0 auto; padding:32px 20px 64px; }
-    h1 { font-size:28px; margin:0 0 6px; }
-    p.lead { color:var(--muted); margin:0 0 28px; }
-    .actions { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:28px; }
-    button { border:0; border-radius:10px; padding:12px 18px; font-weight:600; cursor:pointer; font-size:14px; transition: 0.2s; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .primary { background:var(--blue); color:white; }
-    .primary:hover:not(:disabled) { background:#1d4ed8; }
-    .secondary { background:var(--card); color:var(--text); border:1px solid var(--line); }
-    .secondary:hover:not(:disabled) { background:#334155; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
-    .card h3 { margin:0 0 10px; font-size:17px; word-break:break-all; }
-    .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; }
-    .disponible { background:#164e63; color:#67e8f9; }
-    .usado { background:#14532d; color:#86efac; }
-    .error { background:#7f1d1d; color:#fecaca; }
-    .field { margin:10px 0; }
-    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-    .value { word-break:break-all; }
-    a { color:#93c5fd; }
-    .empty { color:var(--muted); text-align:center; padding:40px; border:1px dashed var(--line); border-radius:14px; }
-    .status { margin-top:18px; padding:16px; border-radius:10px; background:var(--card); border:1px solid var(--line); display:none; font-weight:500; }
-    .status.error { border-color: var(--red); background: #450a0a; }
-    .status.success { border-color: var(--green); background: #052e16; }
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; vertical-align: middle; margin-right: 8px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor IPTV Automático</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .card { background-color: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 500px; }
+        h2 { margin-top: 0; color: #38bdf8; text-align: center; }
+        p { color: #94a3b8; font-size: 14px; text-align: center; margin-bottom: 20px; }
+        button { background-color: #0284c7; color: white; border: none; padding: 14px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.2s; }
+        button:hover { background-color: #0369a1; }
+        button:disabled { background-color: #334155; cursor: not-allowed; }
+        .field { margin-bottom: 15px; text-align: left; }
+        .field label { font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px; }
+        .field input { width: 100%; padding: 8px 10px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
+        #status { margin-top: 15px; font-size: 14px; color: #cbd5e1; min-height: 20px; text-align: center; }
+        .result-box { margin-top: 25px; background: #0f172a; padding: 18px; border-radius: 8px; text-align: left; display: none; border: 1px solid #334155; }
+        .result-box h3 { margin-top: 0; font-size: 16px; color: #4ade80; text-align: center; }
+        .email-list { margin-top: 20px; font-size: 12px; color: #94a3b8; max-height: 200px; overflow-y: auto; }
+        .email-item { padding: 4px 0; border-bottom: 1px solid #334155; }
+        .email-item.usado { color: #4ade80; text-decoration: line-through; }
+    </style>
 </head>
 <body>
-  <main class="wrap">
-    <h1>Gestor de pruebas IPTV</h1>
-    <p class="lead">Haz clic en "Nueva prueba" para lanzar el workflow automático. La página se actualizará sola cuando termine.</p>
 
-    <div class="actions">
-      <button class="primary" id="next">Nueva prueba (Auto)</button>
-      <button class="secondary" id="reload">Actualizar datos</button>
+    <div class="card">
+        <h2>Gestor IPTV Automático</h2>
+        <p>Introduce tu token de GitHub para iniciar el proceso.</p>
+        
+        <div class="field">
+            <label>GitHub Personal Access Token (ghp_...):</label>
+            <input type="password" id="inputToken" placeholder="Pega aquí tu token seguro...">
+        </div>
+
+        <button id="btnGenerar" onclick="lanzarGeneracion()">Generar Prueba IPTV</button>
+        <div id="status"></div>
+
+        <div id="resultadoBox" class="result-box">
+            <h3>¡Proceso Completado!</h3>
+            <div class="field">
+                <label>Correo utilizado:</label>
+                <input type="text" id="resCorreo" readonly>
+            </div>
+            <div class="field">
+                <label>Usuario IPTV:</label>
+                <input type="text" id="resUsuario" readonly onclick="this.select()">
+            </div>
+            <div class="field">
+                <label>Contraseña IPTV:</label>
+                <input type="text" id="resPassword" readonly onclick="this.select()">
+            </div>
+            <div class="field">
+                <label>Host / URL:</label>
+                <input type="text" id="resHost" readonly onclick="this.select()">
+            </div>
+            <div class="field">
+                <label>Enlace M3U (si disponible):</label>
+                <input type="text" id="resM3u" readonly onclick="this.select()">
+            </div>
+        </div>
+
+        <div class="email-list" id="emailListContainer">
+            <!-- Aquí se cargarán los correos -->
+        </div>
     </div>
 
-    <div class="status" id="status"></div>
-    <section class="grid" id="results"></section>
-  </main>
+    <script>
+        // ⚠️ CONFIGURACIÓN: CAMBIA ESTO CON TUS DATOS
+        const GITHUB_USER = "TU_USUARIO"; 
+        const REPO_NAME = "weselliptv-correo";
+        const WORKFLOW_FILE = "full-flow.yml"; // Nombre exacto del archivo en .github/workflows/
+        const BRANCH = "main";
 
-<script>
-// ==========================================
-// CONFIGURACIÓN: CAMBIA ESTO CON TU USUARIO Y REPO
-// ==========================================
-const GITHUB_USER = 'TU_USUARIO'; 
-const GITHUB_REPO = 'weselliptv-correo'; 
-const GITHUB_BRANCH = 'main';
-// ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedToken = localStorage.getItem("github_token");
+            if (savedToken) document.getElementById("inputToken").value = savedToken;
+            cargarListaCorreos();
+        });
 
-const statusBox = document.getElementById('status');
-const results = document.getElementById('results');
-const nextBtn = document.getElementById('next');
+        async function cargarListaCorreos() {
+            try {
+                const res = await fetch('emails.json?_=' + new Date().getTime());
+                if (res.ok) {
+                    const emails = await res.json();
+                    const container = document.getElementById("emailListContainer");
+                    container.innerHTML = "<strong>Estado de los correos:</strong>";
+                    emails.forEach(item => {
+                        const div = document.createElement("div");
+                        div.className = "email-item " + (item.status === 'usado' ? 'usado' : '');
+                        div.textContent = `${item.email} (${item.status})`;
+                        container.appendChild(div);
+                    });
+                }
+            } catch(e) {}
+        }
 
-let pollingInterval = null;
-let initialUsedCount = -1;
+        async function lanzarGeneracion() {
+            const tokenInput = document.getElementById("inputToken").value.trim();
 
-function showStatus(text, type = 'info') {
-  statusBox.style.display = 'block';
-  statusBox.innerHTML = text;
-  statusBox.className = 'status ' + type;
-}
+            if (!tokenInput) {
+                alert("Por favor, introduce tu Token de GitHub en la casilla.");
+                return;
+            }
 
-async function loadData(isPolling = false) {
-  try {
-    // Añadimos un timestamp para evitar la caché del navegador
-    const t = Date.now();
-    const [emailsRes, resultRes] = await Promise.all([
-      fetch(`emails.json?t=${t}`),
-      fetch(`result.json?t=${t}`)
-    ]);
-    const emails = await emailsRes.json();
-    let result = null;
-    if (resultRes.ok) result = await resultRes.json();
-    
-    renderEmails(emails, result);
+            localStorage.setItem("github_token", tokenInput);
 
-    // Si estamos en modo polling, comprobamos si ha terminado
-    if (isPolling) {
-      const currentUsedCount = emails.filter(e => e.status === 'usado').length;
-      // Si el número de usados ha aumentado, o el resultado tiene estado OK, hemos terminado
-      if (currentUsedCount > initialUsedCount || (result && result.estado === 'OK')) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-        nextBtn.disabled = false;
-        nextBtn.innerHTML = 'Nueva prueba (Auto)';
-        showStatus(`✅ ¡Proceso completado! Revisa los datos abajo.`, 'success');
-      }
-    }
-  } catch (error) {
-    if (!isPolling) showStatus('No se pudieron cargar los datos. Revisa la consola.', 'error');
-    console.error(error);
-  }
-}
+            const btn = document.getElementById("btnGenerar");
+            const status = document.getElementById("status");
+            const box = document.getElementById("resultadoBox");
 
-function field(label, value) {
-  if (!value) return '';
-  return `<div class="field"><div class="label">${label}</div><div class="value">${value}</div></div>`;
-}
+            btn.disabled = true;
+            box.style.display = "none";
+            status.innerHTML = "🚀 Enviando orden a GitHub Actions...";
 
-function renderEmails(emails, result) {
-  results.innerHTML = '';
-  if (!emails.length) {
-    results.innerHTML = '<div class="empty">No hay correos en emails.json.</div>';
-    return;
-  }
+            const url = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
 
-  emails.forEach(item => {
-    const r = item.result || {};
-    const card = document.createElement('article');
-    card.className = 'card';
-    card.innerHTML = `
-      <h3>${item.email}</h3>
-      <span class="badge ${item.status}">${item.status}</span>
-      ${field('Usuario', r.username)}
-      ${field('Contraseña', r.password)}
-      ${field('Host', r.host_url)}
-      ${field('Backup', r.backup_host_url)}
-      ${field('M3U', r.m3u_url ? `<a href="${r.m3u_url}" target="_blank" rel="noopener">Abrir M3U</a>` : '')}
-      ${field('Fecha de uso', item.used_at ? new Date(item.used_at).toLocaleString('es-ES') : '')}
-      ${field('Mensaje', r.mensaje)}
-    `;
-    results.appendChild(card);
-  });
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${tokenInput}`,
+                        'Accept': 'application/vnd.github+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ref: BRANCH })
+                });
 
-  // Si no estamos haciendo polling, mostramos el estado del último result.json
-  if (result && !pollingInterval) {
-    if (result.estado === 'OK') {
-      showStatus(`Última lectura: <b>${result.estado}</b>. Correo: ${result.correo_usado}`, 'success');
-    } else {
-      showStatus(`Última lectura: <b>${result.estado}</b>. ${result.mensaje || ''}`, 'error');
-    }
-  }
-}
+                if (response.ok) {
+                    status.innerHTML = "⏳ Proceso en marcha... Esperando datos (aprox. 1-2 minutos)...";
+                    monitorearResultado();
+                } else if (response.status === 401) {
+                    status.innerHTML = "❌ Error 401: Token inválido o revocado.";
+                    btn.disabled = false;
+                } else if (response.status === 404) {
+                    status.innerHTML = "❌ Error 404: No se encuentra el repositorio o el workflow. Revisa la configuración.";
+                    btn.disabled = false;
+                } else {
+                    status.innerHTML = "❌ Error al iniciar. Código: " + response.status;
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                status.innerHTML = "❌ Error de conexión: " + err.message;
+                btn.disabled = false;
+            }
+        }
 
-document.getElementById('reload').addEventListener('click', () => loadData(false));
+        function monitorearResultado() {
+            const intervalo = setInterval(async () => {
+                try {
+                    const res = await fetch('result.json?_=' + new Date().getTime());
+                    if (res.ok) {
+                        const data = await res.json();
+                        
+                        // Comprobamos si el resultado es nuevo (por la fecha o porque tiene estado OK)
+                        if (data && data.estado === 'OK') {
+                            document.getElementById("resCorreo").value = data.correo_usado || "N/A";
+                            document.getElementById("resUsuario").value = data.username || "N/A";
+                            document.getElementById("resPassword").value = data.password || "N/A";
+                            document.getElementById("resHost").value = data.host_url || "N/A";
+                            document.getElementById("resM3u").value = data.m3u_url || "No disponible";
 
-nextBtn.addEventListener('click', async () => {
-  if (pollingInterval) return;
-
-  // 1. Abrir la pestaña de GitHub Actions para que el usuario le dé a "Run workflow"
-  const actionsUrl = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/actions/workflows/full-flow.yml`;
-  window.open(actionsUrl, '_blank', 'noopener');
-  
-  // 2. Poner la interfaz en modo espera
-  nextBtn.disabled = true;
-  nextBtn.innerHTML = '<span class="spinner"></span> Esperando workflow...';
-  showStatus('Pestaña de GitHub abierta. Pulsa "Run workflow" allí. Esta página se actualizará sola cuando termine.', 'info');
-
-  // 3. Iniciar polling
-  try {
-    const t = Date.now();
-    const emails = await fetch(`emails.json?t=${t}`).then(r => r.json());
-    initialUsedCount = emails.filter(e => e.status === 'usado').length;
-  } catch (e) {
-    initialUsedCount = -1;
-  }
-
-  pollingInterval = setInterval(() => loadData(true), 5000);
-});
-
-loadData(false);
-</script>
+                            document.getElementById("resultadoBox").style.display = "block";
+                            document.getElementById("status").innerHTML = "✅ ¡Datos recibidos correctamente!";
+                            document.getElementById("btnGenerar").disabled = false;
+                            clearInterval(intervalo);
+                            cargarListaCorreos(); // Actualizar la lista de correos
+                        }
+                    }
+                } catch (e) {
+                    // Esperando respuesta...
+                }
+            }, 8000);
+        }
+    </script>
 </body>
 </html>
