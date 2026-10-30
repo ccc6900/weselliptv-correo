@@ -1,106 +1,60 @@
 [
   {
-    "email": "soporte.tecnico.es@gmx.es",
-    "status": "usado",
-    "used_at": "2026-10-30T06:59:22.862428+00:00",
-    "result": {
-      "estado": "OK",
-      "asunto": "WeSelllPTV - 36 Hours Trial",
-      "fecha_correo": "Fri, 30 Oct 2026 06:28:33 +0000",
-      "remitente": "WeSelllPTV <contact@weselliptv.com>",
-      "username": "LCNYCMB4A2",
-      "password": "LCNYC8ACCA",
-      "host_url": "http://kytv.xyz",
-      "backup_host_url": "http://kemotvpromax.xyz",
-      "m3u_url": "",
-      "correo_usado": "soporte.tecnico.es@gmx.es",
-      "fecha_procesado": "2026-10-30T06:59:21.114509+00:00",
-      "mensaje": "Datos extraídos del correo de activación más reciente."
-    }
-  },
-  {
-    "email": "alertas2.servicio@gmx.es",
-    "status": "usado",
-    "used_at": "2026-10-30T07:20:22.330473+00:00",
-    "result": {
-      "estado": "OK",
-      "asunto": "WeSelllPTV - 36 Hours Trial",
-      "fecha_correo": "Fri, 30 Oct 2026 06:28:33 +0000",
-      "remitente": "WeSelllPTV <contact@weselliptv.com>",
-      "username": "LCNYCMB4A2",
-      "password": "LCNYC8ACCA",
-      "host_url": "http://kytv.xyz",
-      "backup_host_url": "http://kemotvpromax.xyz",
-      "m3u_url": "",
-      "correo_usado": "alertas2.servicio@gmx.es",
-      "fecha_procesado": "2026-10-30T07:20:20.854813+00:00",
-      "mensaje": "Datos extraídos del correo de activación más reciente."
-    }
-  },
-  {
-    "email": "info.promociones@gmx.es",
-    "status": "usado",
-    "used_at": "2026-10-30T07:24:30.238169+00:00",
-    "result": {
-      "estado": "OK",
-      "asunto": "WeSelllPTV - 36 Hours Trial",
-      "fecha_correo": "Fri, 30 Oct 2026 06:28:33 +0000",
-      "remitente": "WeSelllPTV <contact@weselliptv.com>",
-      "username": "LCNYCMB4A2",
-      "password": "LCNYC8ACCA",
-      "host_url": "http://kytv.xyz",
-      "backup_host_url": "http://kemotvpromax.xyz",
-      "m3u_url": "http://kytv.xyz/get.php?username=LCNYCMB4A2&password=LCNYC8ACCA&type=m3u_plus",
-      "correo_usado": "info.promociones@gmx.es",
-      "fecha_procesado": "2026-10-30T07:24:28.357982+00:00",
-      "mensaje": "Datos extraídos del correo de activación más reciente."
-    }
-  },
-  {
-    "email": "notificaciones.web@gmx.es",
-    "status": "usado",
-    "used_at": "2026-10-30T07:32:30.029921+00:00",
-    "result": {
-      "estado": "OK",
-      "asunto": "WeSelllPTV - 36 Hours Trial",
-      "fecha_correo": "Fri, 30 Oct 2026 06:28:33 +0000",
-      "remitente": "WeSelllPTV <contact@weselliptv.com>",
-      "username": "LCNYCMB4A2",
-      "password": "LCNYC8ACCA",
-      "host_url": "http://kytv.xyz",
-      "backup_host_url": "http://kemotvpromax.xyz",
-      "m3u_url": "http://kytv.xyz/get.php?username=LCNYCMB4A2&password=LCNYC8ACCA&type=m3u_plus",
-      "correo_usado": "notificaciones.web@gmx.es",
-      "fecha_procesado": "2026-10-30T07:32:28.179162+00:00",
-      "mensaje": "Datos extraídos del correo de activación más reciente."
-    }
-  },
-  {
-    "email": "suscripciones.mail@gmx.es",
+    "email": "cuentas.premiumjd@gmail.com",
     "status": "disponible",
     "used_at": null,
     "result": null
   },
   {
-    "email": "atencion.cliente@gmx.es",
+    "email": "cuentaspremium.jd@gmail.com",
     "status": "disponible",
     "used_at": null,
     "result": null
   },
   {
-    "email": "sistema.avisos@gmx.es",
+    "email": "cuentaspremiumj.d@gmail.com",
     "status": "disponible",
     "used_at": null,
     "result": null
   },
   {
-    "email": "gestion.cuenta@gmx.es",
+    "email": "c.u.entaspremiumjd@gmail.com",
     "status": "disponible",
     "used_at": null,
     "result": null
   },
   {
-    "email": "egistro.temp.es@gmx.es",
+    "email": "cuentas.premium.jd@gmail.com",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "c.u.e.n.t.a.s.premiumjd@gmail.com",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "cuentaspremium.j.d@gmail.com",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "cuentas.premiumj.d@gmail.com",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "c.u.e.n.t.a.s.p.r.e.m.i.u.m.j.d@gmail.com",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "cuentas.p.r.e.m.i.u.m.j.d@gmail.com",
     "status": "disponible",
     "used_at": null,
     "result": null
