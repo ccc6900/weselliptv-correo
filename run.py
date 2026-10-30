@@ -6,7 +6,7 @@ import imaplib
 import email
 import html
 from datetime import datetime, timezone
-from urllib.parse import urlsplit, parse_qs
+from urllib.parse import urlsplit, parse_qs, urlencode
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
@@ -16,8 +16,8 @@ OUTPUT_FILE = "result.json"
 EMAILS_FILE = "emails.json"
 USED_EMAIL_FILE = "used-email.txt"
 MAX_MESSAGES = 100
-WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "300"))
-WAIT_INTERVAL = int(os.environ.get("WAIT_INTERVAL", "20"))
+WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "600"))
+WAIT_INTERVAL = int(os.environ.get("WAIT_INTERVAL", "30"))
 
 
 def decode_mime(value):
@@ -101,6 +101,22 @@ def values_from_url(m3u_url):
         return {"username": username, "password": password, "host_url": host_url}
     except (ValueError, TypeError):
         return {"username": "", "password": "", "host_url": ""}
+
+
+def construir_m3u(host, username, password, tipo="m3u_plus"):
+    """Genera un enlace M3U estándar a partir de los datos del correo."""
+    if not host or not username or not password:
+        return ""
+    if not host.startswith(("http://", "https://")):
+        host = "http://" + host
+    host = host.rstrip("/")
+    
+    params = {
+        "username": username,
+        "password": password,
+        "type": tipo
+    }
+    return f"{host}/get.php?{urlencode(params)}"
 
 
 def load_emails():
@@ -190,6 +206,10 @@ def parse_candidate(msg):
 
     if not m3u and not (username or host):
         return None
+
+    # Si el correo no trae el enlace M3U, lo construimos con los datos
+    if not m3u and username and stream_password and host:
+        m3u = construir_m3u(host, username, stream_password, "m3u_plus")
 
     return {
         "estado": "OK",
