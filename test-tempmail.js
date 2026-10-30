@@ -1,38 +1,19 @@
 import { chromium } from 'playwright';
 
-const MAILTM_API = 'https://api.mail.tm';
-
-// Función para esperar un tiempo
+const API_BASE = 'https://www.1secmail.com/api/v1/';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function obtenerDominios() {
-  const res = await fetch(`${MAILTM_API}/domains`);
-  const data = await res.json();
-  // La API devuelve los dominios en 'hydra:member'
-  return data['hydra:member'].map(d => d.domain);
+  const res = await fetch(`${API_BASE}?action=getDomainList`);
+  const dominios = await res.json();
+  return dominios;
 }
 
-async function crearCuenta(domain) {
+async function crearCorreo(domain) {
   const username = `test${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  const password = 'password123';
   const address = `${username}@${domain}`;
-
-  const res = await fetch(`${MAILTM_API}/accounts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, password })
-  });
-
-  if (!res.ok) return null; // Si falla la creación, pasamos al siguiente
-
-  const tokenRes = await fetch(`${MAILTM_API}/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, password })
-  });
-  const tokenData = await tokenRes.json();
-
-  return { address, token: tokenData.token };
+  // 1secMail no requiere crear la cuenta, el correo existe automáticamente
+  return { address, login: username, domain };
 }
 
 async function probarEnWeb(email) {
@@ -68,9 +49,9 @@ async function probarEnWeb(email) {
     
     const bodyText = await page.locator('body').innerText();
     if (bodyText.includes('Check Your Inbox') || bodyText.includes('Email sent')) {
-      return true; // La web dice que lo ha enviado
+      return true;
     }
-    return false; // La web lo rechazó o mostró otro mensaje
+    return false;
   } catch (e) {
     return false;
   } finally {
@@ -78,53 +59,58 @@ async function probarEnWeb(email) {
   }
 }
 
-async function esperarCorreo(token, maxIntentos = 6, intervalo = 5000) {
+async function esperarCorreo(login, domain, maxIntentos = 6, intervalo = 5000) {
   for (let i = 0; i < maxIntentos; i++) {
     await sleep(intervalo);
-    const res = await fetch(`${MAILTM_API}/messages`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const data = await res.json();
-    if (data['hydra:member'] && data['hydra:member'].length > 0) {
-      return true; // ¡Correo recibido!
+    try {
+      const res = await fetch(`${API_BASE}?action=getMessages&login=${login}&domain=${domain}`);
+      const mensajes = await res.json();
+      if (mensajes && mensajes.length > 0) {
+        return true; // ¡Correo recibido!
+      }
+    } catch (e) {
+      // Ignorar errores de red y reintentar
     }
   }
   return false;
 }
 
 async function main() {
-  console.log('Obteniendo lista de dominios de mail.tm...');
+  console.log('Obteniendo lista de dominios de 1secMail...');
   const dominios = await obtenerDominios();
+  
+  if (!dominios || dominios.length === 0) {
+    console.log('❌ No se pudieron obtener los dominios de 1secMail.');
+    return;
+  }
+  
   console.log(`Dominios encontrados: ${dominios.length}`);
+  console.log(`Dominios: ${dominios.join(', ')}`);
 
   for (const domain of dominios) {
     console.log(`\n--- Probando dominio: ${domain} ---`);
     
-    const cuenta = await crearCuenta(domain);
-    if (!cuenta) {
-      console.log(`No se pudo crear cuenta con ${domain}. Saltando.`);
-      continue;
-    }
-    console.log(`Cuenta creada: ${cuenta.address}`);
+    const cuenta = await crearCorreo(domain);
+    console.log(`Correo generado: ${cuenta.address}`);
 
     const enviado = await probarEnWeb(cuenta.address);
     if (!enviado) {
       console.log(`WeSellIPTV rechazó el correo con ${domain}. Saltando.`);
       continue;
     }
-    console.log(`WeSellIPTV aceptó el correo. Esperando que llegue a mail.tm...`);
+    console.log(`WeSellIPTV aceptó el correo. Esperando que llegue a 1secMail...`);
 
-    const recibido = await esperarCorreo(cuenta.token);
+    const recibido = await esperarCorreo(cuenta.login, cuenta.domain);
     if (recibido) {
       console.log(`\n✅ ¡ÉXITO! El dominio que funciona es: ${domain}`);
       console.log(`Puedes usar este dominio en tu flujo principal.`);
       return; // Terminamos, hemos encontrado uno que funciona
     } else {
-      console.log(`El correo no llegó a mail.tm con ${domain}. Saltando.`);
+      console.log(`El correo no llegó a 1secMail con ${domain}. Saltando.`);
     }
   }
 
-  console.log('\n❌ Ningún dominio de mail.tm ha funcionado. WeSellIPTV los bloquea todos.');
+  console.log('\n❌ Ningún dominio de 1secMail ha funcionado. WeSellIPTV los bloquea todos.');
 }
 
 main().catch(console.error);
