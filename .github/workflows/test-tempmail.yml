@@ -1,35 +1,64 @@
-name: Test - Correos Temporales (mail.tm)
+import { chromium } from 'playwright';
 
-on:
-  workflow_dispatch:
+const TARGET_URL = 'https://swooptv.tv/';
 
-jobs:
-  test-tempmail:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@v4
+async function main() {
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+  });
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    viewport: { width: 1366, height: 768 },
+  });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  });
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+  try {
+    console.log('Abriendo Swoop TV...');
+    await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(3000);
 
-      - name: Instalar dependencias
-        run: npm install
+    // Buscar enlace de registro o prueba gratis
+    const signupLink = page.locator('a, button').filter({ hasText: /sign up|free trial|get started|register/i }).first();
+    
+    if (await signupLink.isVisible().catch(() => false)) {
+      console.log('Encontrado enlace de registro/prueba. Haciendo clic...');
+      await signupLink.click();
+      await page.waitForTimeout(3000);
+    } else {
+      console.log('No se encontró enlace directo. Buscando en la página...');
+    }
 
-      - name: Instalar navegador Chromium
-        run: npx playwright install --with-deps chromium
+    await page.screenshot({ path: 'swoop-register.png', fullPage: true });
+    console.log('Captura guardada: swoop-register.png');
 
-      - name: Ejecutar prueba de correo temporal
-        run: node test-tempmail.js
+    // Volcar los inputs visibles para ver qué campos piden
+    const inputs = await page.locator('input').all();
+    console.log(`\nCampos de formulario encontrados (${inputs.length}):`);
+    for (const input of inputs) {
+      const type = await input.getAttribute('type').catch(() => '?');
+      const name = await input.getAttribute('name').catch(() => '?');
+      const placeholder = await input.getAttribute('placeholder').catch(() => '?');
+      console.log(`  - type="${type}" name="${name}" placeholder="${placeholder}"`);
+    }
 
-      - name: Guardar capturas
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: tempmail-test-resultado
-          path: tempmail-result.png
-          retention-days: 7
-          if-no-files-found: warn
+    // Comprobar si pide teléfono en algún sitio
+    const bodyText = await page.locator('body').innerText();
+    if (bodyText.toLowerCase().includes('phone') || bodyText.toLowerCase().includes('whatsapp')) {
+      console.log('\n⚠️ La página menciona teléfono/WhatsApp.');
+    } else {
+      console.log('\n✅ La página NO menciona teléfono/WhatsApp en el registro.');
+    }
+
+  } catch (error) {
+    console.error('ERROR:', error.message);
+    try { await page.screenshot({ path: 'swoop-error.png', fullPage: true }); } catch (e) {}
+  } finally {
+    await browser.close();
+  }
+}
+
+main();
