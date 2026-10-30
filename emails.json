@@ -77,9 +77,22 @@
   },
   {
     "email": "egistro.temp.es@gmx.es",
-    "status": "disponible",
-    "used_at": null,
-    "result": null
+    "status": "usado",
+    "used_at": "2026-10-30T06:28:41.142040+00:00",
+    "result": {
+      "estado": "OK",
+      "asunto": "WeSelllPTV - 36 Hours Trial",
+      "fecha_correo": "Fri, 30 Oct 2026 06:24:44 +0000",
+      "remitente": "WeSelllPTV <contact@weselliptv.com>",
+      "username": "L7R5994445",
+      "password": "L7R5956CC8",
+      "host_url": "http://kytv.xyz",
+      "backup_host_url": "http://kemotvpromax.xyz",
+      "m3u_url": "",
+      "correo_usado": "egistro.temp.es@gmx.es",
+      "fecha_procesado": "2026-10-30T06:28:39.094105+00:00",
+      "mensaje": "Datos extraídos del correo de activación más reciente."
+    }
   },
   {
     "email": "ofertas.tracker@gmx.es",
