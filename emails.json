@@ -1,0 +1,14 @@
+[
+  {
+    "email": "alias1@proton.me",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  },
+  {
+    "email": "alias2@proton.me",
+    "status": "disponible",
+    "used_at": null,
+    "result": null
+  }
+]
