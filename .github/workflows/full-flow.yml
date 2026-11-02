@@ -1,0 +1,48 @@
+name: Flujo completo - Automatización IPTV
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: 1. Enviar correo en WeSellIPTV
+        run: node send-email.js
+
+      - name: 2. Leer correo en Proton
+        env:
+          PROTON_USER: ${{ secrets.PROTON_USER }}
+          PROTON_PASS: ${{ secrets.PROTON_PASS }}
+        run: node read-proton.js
+
+      - name: 3. Extraer datos
+        run: python run.py
+
+      - name: Guardar cambios
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Actualizar prueba IPTV [skip ci]"
+          file_pattern: "result.json emails.json"
