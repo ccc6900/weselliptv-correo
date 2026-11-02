@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador IPTV Auto</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background-color: #1e293b; padding: 30px; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h2 { color: #38bdf8; text-align: center; margin-top: 0; }
+        input, button { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; box-sizing: border-box; border: none; }
+        input { background: #0f172a; color: white; border: 1px solid #475569; }
+        button { background-color: #0284c7; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background-color: #0369a1; }
+        button:disabled { background-color: #334155; cursor: not-allowed; }
+        .result-box { background: #0f172a; padding: 15px; border-radius: 8px; display: none; border: 1px solid #334155; margin-top: 20px; }
+        .field { margin-bottom: 10px; }
+        .label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; display: block; }
+        .value { width: 100%; padding: 8px; background: #1e293b; color: #4ade80; border: 1px solid #475569; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        #status { text-align: center; font-size: 14px; color: #cbd5e1; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Generador de Prueba IPTV</h2>
+        <input type="password" id="token" placeholder="Pega tu GitHub Token aquí...">
+        <button id="btn" onclick="iniciar()">Generar Prueba Automática</button>
+        <div id="status"></div>
+
+        <div id="resultado" class="result-box">
+            <div class="field"><span class="label">Usuario:</span><input class="value" id="resUser" readonly></div>
+            <div class="field"><span class="label">Contraseña:</span><input class="value" id="resPass" readonly></div>
+            <div class="field"><span class="label">Host:</span><input class="value" id="resHost" readonly></div>
+            <div class="field"><span class="label">M3U:</span><input class="value" id="resM3u" readonly></div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ CAMBIA ESTO CON TU USUARIO Y REPOSITORIO
+        const GITHUB_USER = "ccc6900";
+        const REPO_NAME = "weselliptv-correo"; 
+        const WORKFLOW = "full-flow.yml";
+
+        document.getElementById('token').value = localStorage.getItem('gh_token') || '';
+
+        async function iniciar() {
+            const token = document.getElementById('token').value.trim();
+            if (!token) return alert("Falta el Token");
+            localStorage.setItem('gh_token', token);
+
+            const btn = document.getElementById('btn');
+            const status = document.getElementById('status');
+            btn.disabled = true;
+            document.getElementById('resultado').style.display = 'none';
+            status.innerText = "🚀 Enviando orden a GitHub Actions...";
+
+            try {
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/actions/workflows/${WORKFLOW}/dispatches`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' },
+                    body: JSON.stringify({ ref: 'main' })
+                });
+                
+                if (res.ok) {
+                    status.innerText = "⏳ Proceso en marcha. Esperando respuesta (2-3 min)...";
+                    monitorear();
+                } else {
+                    status.innerText = "❌ Error al iniciar. Revisa tu token.";
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                status.innerText = "❌ Error de red.";
+                btn.disabled = false;
+            }
+        }
+
+        function monitorear() {
+            const intervalo = setInterval(async () => {
+                try {
+                    const res = await fetch('result.json?t=' + Date.now());
+                    const data = await res.json();
+                    if (data.estado === 'OK') {
+                        document.getElementById('resUser').value = data.username;
+                        document.getElementById('resPass').value = data.password;
+                        document.getElementById('resHost').value = data.host_url;
+                        document.getElementById('resM3u').value = data.m3u_url;
+                        document.getElementById('resultado').style.display = 'block';
+                        document.getElementById('status').innerText = "✅ ¡Completado!";
+                        document.getElementById('btn').disabled = false;
+                        clearInterval(intervalo);
+                    }
+                } catch(e) {}
+            }, 8000);
+        }
+    </script>
+</body>
+</html>
