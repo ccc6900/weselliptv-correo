@@ -9,7 +9,6 @@ async function main() {
   if (!email || !protonUser || !protonPass) throw new Error("Faltan datos o secretos.");
 
   console.log(`Buscando correo para: ${email}`);
-  console.log('Iniciando navegador...');
 
   const browser = await chromium.launch({ 
     headless: true, 
@@ -18,95 +17,49 @@ async function main() {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
-    locale: 'es-ES',
   });
   const page = await context.newPage();
 
   try {
-    console.log('Entrando a Proton Mail...');
     await page.goto('https://mail.proton.me/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    
-    // Esperar un poco a que cargue el JS de Proton
     await page.waitForTimeout(5000);
 
-    // Intentar cerrar banner de cookies si existe
-    try {
-      const cookieBtn = page.getByRole('button', { name: /accept|agree|aceptar/i }).first();
-      if (await cookieBtn.isVisible({ timeout: 3000 })) {
-        console.log('Aceptando cookies de Proton...');
-        await cookieBtn.click();
-        await page.waitForTimeout(2000);
-      }
-    } catch (e) {}
+    // Login
+    await page.locator('input#username, input[name="username"]').first().fill(protonUser);
+    await page.getByRole('button', { name: /next|siguiente|continue/i }).first().or(page.locator('button[type="submit"]').first()).click();
+    await page.waitForTimeout(3000);
 
-    console.log('Buscando campo de usuario...');
-    // Proton suele usar un input con id="username" o name="username"
-    const userInput = page.locator('input#username').first()
-      .or(page.locator('input[name="username"]').first())
-      .or(page.locator('input[type="email"]').first())
-      .or(page.locator('input[autocomplete="username"]').first());
-
-    await userInput.waitFor({ state: 'visible', timeout: 30000 });
-    await userInput.fill(protonUser);
-    console.log('Usuario escrito. Pulsando Siguiente...');
-
-    const nextBtn = page.getByRole('button', { name: /next|siguiente|continue/i }).first()
-      .or(page.locator('button[type="submit"]').first());
-    await nextBtn.click();
+    await page.locator('input#password, input[name="password"]').first().fill(protonPass);
+    await page.getByRole('button', { name: /sign in|log in|entrar/i }).first().or(page.locator('button[type="submit"]').first()).click();
     
-    await page.waitForTimeout(4000);
-
-    console.log('Buscando campo de contraseña...');
-    const passInput = page.locator('input#password').first()
-      .or(page.locator('input[name="password"]').first())
-      .or(page.locator('input[type="password"]').first());
-      
-    await passInput.waitFor({ state: 'visible', timeout: 20000 });
-    await passInput.fill(protonPass);
-    console.log('Contraseña escrita. Entrando...');
-
-    const loginBtn = page.getByRole('button', { name: /sign in|log in|entrar/i }).first()
-      .or(page.locator('button[type="submit"]').first());
-    await loginBtn.click();
-    
-    console.log('Esperando a que cargue la bandeja de entrada (esto puede tardar)...');
+    console.log('Esperando a que cargue la bandeja de entrada...');
     await page.waitForTimeout(15000); 
 
-    // Verificar si nos hemos quedado atascados en una pantalla de verificación (2FA)
-    const bodyText = await page.locator('body').innerText();
-    if (bodyText.includes('verification') || bodyText.includes('verificación') || bodyText.includes('code') && bodyText.includes('email')) {
-      console.log('⚠️ Proton está pidiendo un código de verificación (2FA).');
-      await page.screenshot({ path: 'proton-2fa.png', fullPage: true });
-      process.exit(1);
-    }
-
     let found = false;
-    for (let i = 0; i < 6; i++) {
-      console.log(`Buscando correo de WeSell (Intento ${i+1})...`);
+    // AUMENTAMOS EL NÚMERO DE INTENTOS A 12 (aprox. 2.5 minutos esperando)
+    for (let i = 0; i < 12; i++) {
+      console.log(`Buscando correo de WeSell (Intento ${i+1}/12)...`);
       
-      // Buscar el correo en la lista
       const emailRow = page.locator('[data-testid="message-list-item"]').filter({ hasText: /WeSell/i }).first();
       
       if (await emailRow.count() > 0) {
         console.log('¡Correo encontrado! Abriendo...');
         await emailRow.click();
         await page.waitForTimeout(4000);
-        
-        // Extraer todo el texto visible del cuerpo del correo
         const emailBody = await page.locator('body').innerText();
         fs.writeFileSync('email-body.txt', emailBody, 'utf-8');
-        console.log('✅ Texto del correo guardado en email-body.txt');
+        console.log('✅ Texto del correo guardado.');
         found = true;
         break;
       }
       
       console.log('Aún no ha llegado. Recargando bandeja...');
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(8000);
+      await page.waitForTimeout(10000); // Esperamos 10 segundos entre recargas
     }
 
     if (!found) {
-      console.log('❌ No se encontró el correo en la bandeja de Proton.');
+      console.log('❌ No se encontró el correo en la bandeja de Proton tras 2 minutos.');
       await page.screenshot({ path: 'proton-error.png', fullPage: true });
       process.exit(1);
     }
