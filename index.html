@@ -17,7 +17,8 @@
         .field { margin-bottom: 10px; }
         .label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; display: block; }
         .value { width: 100%; padding: 8px; background: #1e293b; color: #4ade80; border: 1px solid #475569; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
-        #status { text-align: center; font-size: 14px; color: #cbd5e1; margin-top: 10px; }
+        #status { text-align: center; font-size: 14px; color: #cbd5e1; margin-top: 10px; font-weight: bold; }
+        .error { color: #f87171 !important; }
     </style>
 </head>
 <body>
@@ -37,7 +38,7 @@
 
     <script>
         // ⚠️ CAMBIA ESTO CON TU USUARIO Y REPOSITORIO
-        const GITHUB_USER = "ccc6900";
+        const GITHUB_USER = "ccc6900"; 
         const REPO_NAME = "weselliptv-correo"; 
         const WORKFLOW = "full-flow.yml";
 
@@ -52,6 +53,7 @@
             const status = document.getElementById('status');
             btn.disabled = true;
             document.getElementById('resultado').style.display = 'none';
+            status.className = '';
             status.innerText = "🚀 Enviando orden a GitHub Actions...";
 
             try {
@@ -65,10 +67,12 @@
                     status.innerText = "⏳ Proceso en marcha. Esperando respuesta (2-3 min)...";
                     monitorear();
                 } else {
+                    status.className = 'error';
                     status.innerText = "❌ Error al iniciar. Revisa tu token.";
                     btn.disabled = false;
                 }
             } catch (e) {
+                status.className = 'error';
                 status.innerText = "❌ Error de red.";
                 btn.disabled = false;
             }
@@ -79,7 +83,13 @@
                 try {
                     const res = await fetch('result.json?t=' + Date.now());
                     const data = await res.json();
-                    if (data.estado === 'OK') {
+                    
+                    if (data.estado === 'AGOTADO') {
+                        document.getElementById('status').className = 'error';
+                        document.getElementById('status').innerText = "⚠️ AGOTADO: No quedan alias en emails.json. Añade más en GitHub.";
+                        document.getElementById('btn').disabled = false;
+                        clearInterval(intervalo);
+                    } else if (data.estado === 'OK') {
                         document.getElementById('resUser').value = data.username;
                         document.getElementById('resPass').value = data.password;
                         document.getElementById('resHost').value = data.host_url;
